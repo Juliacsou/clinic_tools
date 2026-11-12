@@ -3,7 +3,7 @@ setlocal EnableExtensions DisableDelayedExpansion
 pushd "%~dp0" || goto :error
 
 echo ==========================================================
-echo Visual Health Clinic Tools v2.26.8 - Validacao sem EXE
+echo Visual Health Clinic Tools v2.26.9 - Validacao sem EXE
 echo ==========================================================
 
 where node >nul 2>nul || (echo ERRO: Node.js nao encontrado. & goto :error)

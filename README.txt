@@ -1,4 +1,4 @@
-Visual Health Clinic Tools - v2.26.8
+Visual Health Clinic Tools - v2.26.9
 ====================================
 Full Electron project, including Weekly and Monthly Reports.
 

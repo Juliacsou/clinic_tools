@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('clinicAPI', {
   deleteReferral: (rowNumber) => ipcRenderer.invoke('referrals:delete', rowNumber),
   chooseReferralPdfs: () => ipcRenderer.invoke('pdf:choose'),
   chooseReferralPdf: () => ipcRenderer.invoke('pdf:choose'),
+  attachReferralPdfs: (rowNumber, pdfSourcePaths) => ipcRenderer.invoke('referrals:attach-pdf', rowNumber, pdfSourcePaths),
   openReferralPdf: (rowNumber, fileIndex = 0) => ipcRenderer.invoke('pdf:open', rowNumber, fileIndex),
   getDataLocation: () => ipcRenderer.invoke('app:data-location'),
   chooseDataLocation: () => ipcRenderer.invoke('app:choose-data-location'),

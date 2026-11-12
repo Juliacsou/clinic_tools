@@ -662,8 +662,9 @@ function renderScriptSections(variant){
 
 async function v210EnsureSetupFromInitial(data){
   try{
-    const res=await window.clinicAPI.addSetupFromInitial(data);
-    await window.clinicAPI.saveSetupFormData(res.rowNumber,data);
+    const payload=('_referralRow' in data||!currentInitialContext?.referralRow)?data:{...data,_referralRow:currentInitialContext.referralRow};
+    const res=await window.clinicAPI.addSetupFromInitial(payload);
+    await window.clinicAPI.saveSetupFormData(res.rowNumber,payload);
     return {res,error:'',skipped:false};
   }catch(e){return {res:null,error:errorMessage(e),skipped:false};}
 }
@@ -739,10 +740,11 @@ function renderInitialForm(prefill={},context={}){
   const allowSiblings=!context.setupRow&&!context.incompleteRow;
   const family=context.familySession||{patients:[{...prefill}],index:0};
   const check=(k)=>boolAttr(!!prefill[k]);
+  const referralRowVal=prefill._referralRow||(family.index===0?context.referralRow:'')||'';
   appEl.innerHTML=`<div class="initial-modern-shell"><div class="section-heading"><div><a class="back" id="initialBackLink">← Back</a><h1>${context.setupRow?'Edit Initial Contact':'New Initial Contact'}</h1></div></div>
   ${familyIntakeHtml(family,allowSiblings)}
   <div class="script-switcher"><span>Script:</span><button type="button" data-script-variant="standard" class="${variant==='standard'?'active':''}">Standard Initial Contact</button><button type="button" data-script-variant="concussion" class="${variant==='concussion'?'active':''}">Concussion / TBI</button><button type="button" data-script-variant="amblyopia" class="${variant==='amblyopia'?'active':''}">Amblyopia</button></div>
-  <form id="initialForm"><input type="hidden" name="scriptVariant" value="${esc(variant)}">
+  <form id="initialForm"><input type="hidden" name="scriptVariant" value="${esc(variant)}"><input type="hidden" name="_referralRow" value="${esc(referralRowVal)}">
   <section class="flow-card demographics-card pdf-order-block"><div class="grid three"><label>Date<input type="text" class="us-date" inputmode="numeric" autocomplete="off" placeholder="MM/DD/YYYY" name="date" value="${esc(prefill.date?usDateValue(prefill.date):today)}" required></label><label class="span-2">Patient's name<input name="patientName" required value="${esc(prefill.patientName||'')}"></label><label>Age<input type="number" min="0" max="130" name="age" value="${esc(prefill.age||'')}"></label><label>D.O.B.${dateTextInput('dob',prefill.dob||'')}</label><label>Parent's name<input name="parentName" value="${esc(prefill.parentName||'')}"></label><label>Phone<input name="phone" value="${esc(prefill.phone||'')}"></label><label>Email Address<input type="email" name="email" value="${esc(prefill.email||'')}"></label><label>Grade<select name="grade"><option value=""></option>${['Preschool','PreKindergarten','Kindergarten','1st','2nd','3rd','4th','5th','6th','7th','8th','9th','10th','11th','12th','College'].map(x=>`<option${selectedAttr(prefill.grade,x)}>${x}</option>`).join('')}</select></label><label class="span-2">How did you hear of our office (Who referred you):<input name="referralSource" value="${esc(prefill.referralSource||'')}"></label></div></section>
   <section class="flow-section pdf-order-block"><div class="script-flow" data-script-slot="insurance"></div></section>
   <section class="flow-section pdf-order-block"><div class="script-flow" data-script-slot="doctor"></div><div class="subtle-fields referral-fields"><div class="check-row"><label class="check-option"><input type="checkbox" name="doctorAmblyopia"${check('doctorAmblyopia')}><span>Amblyopia</span></label><label class="check-option"><input type="checkbox" name="doctorStrabismus"${check('doctorStrabismus')}><span>Cross Eye (Strabismus)</span></label><label class="check-option"><input type="checkbox" name="doctorConvergence"${check('doctorConvergence')}><span>Convergence Insufficiency</span></label></div><div class="question-row"><span>Do you or your child wear glasses or contacts?</span>${radioPrefill('glassesContacts','Yes','Yes',prefill.glassesContacts)}${radioPrefill('glassesContacts','No','No',prefill.glassesContacts)}</div><div class="question-row"><span>Was a new RX given?</span>${radioPrefill('newRx','Yes','Yes',prefill.newRx)}${radioPrefill('newRx','No','No',prefill.newRx)}</div><label>Notes<textarea name="doctorNotes" rows="3">${esc(prefill.doctorNotes||'')}</textarea></label></div>
@@ -775,7 +777,7 @@ function renderInitialForm(prefill={},context={}){
   }
   renderScriptSections(variant);document.querySelectorAll('[data-script-variant]').forEach(b=>b.onclick=()=>renderScriptSections(b.dataset.scriptVariant));
   const syncWaitlistFields=()=>{const box=document.getElementById('waitlistExtraFields');if(box)box.hidden=!(document.querySelector('[name=devWaitingList]')?.checked||document.querySelector('[name=youngWaitingList]')?.checked);};document.querySelectorAll('[name=devWaitingList],[name=youngWaitingList]').forEach(x=>x.addEventListener('change',syncWaitlistFields));syncWaitlistFields();
-  const back=()=>{if(context.setupRow)renderSetupLanding(context.setupRow);else if(context.incompleteRow)renderScheduleIncompleteLanding();else renderSetupLanding()};document.getElementById('initialBackLink').onclick=back;document.getElementById('cancelInitial').onclick=back;
+  const back=()=>{if(context.setupRow)renderSetupLanding(context.setupRow);else if(context.incompleteRow)renderScheduleIncompleteLanding();else if(context.referralRow)renderReferralDetail(context.referralRow);else renderSetupLanding()};document.getElementById('initialBackLink').onclick=back;document.getElementById('cancelInitial').onclick=back;
   if(allowSiblings&&family.patients.length>1){
     const incomplete=document.getElementById('saveIncompleteBtn');
     if(incomplete)incomplete.textContent='Save family to Schedule Incomplete';

@@ -204,7 +204,8 @@
       ? `<div class="panel-block"><h3>Log attempt ${r._next_attempt}</h3><form id="contactForm"><input type="hidden" name="attempt" value="${r._next_attempt}">${referralContactScript(r._next_attempt, r)}<label>Date and time<div class="datetime-with-action"><input id="contactDateTime" type="text" autocomplete="off" placeholder="MM/DD/YYYY hh:mm AM/PM" name="contact_datetime" value="${esc(nowUsDateTime())}" required><button type="button" class="btn btn-sm" id="useNowContact">Now</button></div></label><label>Comment<textarea name="comment" rows="3" placeholder="What happened on this call?"></textarea></label><div class="form-row-end" style="margin-top:0"><button class="btn btn-primary" type="submit">Save contact</button></div></form></div>`
       : (closed ? '' : '<div class="banner warn" style="margin-bottom:12px"><span>All three attempts are logged. Continue in the <strong>Next steps</strong> tab.</span></div>');
 
-    const pdfs = (r._pdf_files && r._pdf_files.length) ? `<div class="dsection"><h3>Referral files</h3><div class="inline-actions">${r._pdf_files.map((f, i) => (f.exists ? `<button type="button" class="btn btn-sm referral-pdf-btn" data-pdf-index="${i}">View PDF ${i + 1}</button>` : `<span class="missing-file">PDF ${i + 1} missing</span>`)).join('')}</div></div>` : '';
+    const existingPdfCount = r._pdf_files?.length || 0;
+    const pdfs = `<div class="dsection"><h3>Referral files</h3><div class="inline-actions">${existingPdfCount ? r._pdf_files.map((f, i) => (f.exists ? `<button type="button" class="btn btn-sm referral-pdf-btn" data-pdf-index="${i}">View PDF ${i + 1}</button>` : `<span class="missing-file">PDF ${i + 1} missing</span>`)).join('') : '<span class="muted small">No PDF attached yet.</span>'}${existingPdfCount < 3 ? `<button type="button" class="btn btn-sm" id="attachReferralPdfBtn">+ Attach PDF</button>` : ''}</div></div>`;
 
     const tabs = [
       { key: 'contact', label: 'Contact', html: `<ol class="steps">${steps}</ol>${addContact}` },
@@ -229,7 +230,7 @@
       footer: '<button type="button" class="btn btn-danger" id="deleteReferralBtn">Delete referral</button><span class="spacer"></span><button type="button" class="btn" data-close>Close</button>',
       onMount: (root) => {
         const reopen = async (t) => { markClean(); await renderReferralHome(); openReferralDrawer(rowNumber, t); };
-        $('#startInitialBtn', root).onclick = () => { closeDrawer(true); window.renderInitialForm({ patientName: r['Patient Name'] || '', age: r['Age'] || '', dob: r['DOB'] || '', parentName: r['Parent Name'] || '', phone: r['Phone'] || '', email: r['Email'] || '', grade: r['Grade'] || '', referralSource: source || r['Referring Doctor'] || r['Office Name'] || '', nonDoctorNotes: r['Patient/Parent Concerns or Symptoms'] || '' }); };
+        $('#startInitialBtn', root).onclick = () => { closeDrawer(true); window.renderInitialForm({ patientName: r['Patient Name'] || '', age: r['Age'] || '', dob: r['DOB'] || '', parentName: r['Parent Name'] || '', phone: r['Phone'] || '', email: r['Email'] || '', grade: r['Grade'] || '', referralSource: source || r['Referring Doctor'] || r['Office Name'] || '', nonDoctorNotes: r['Patient/Parent Concerns or Symptoms'] || '', _referralRow: rowNumber }, { referralRow: rowNumber }); };
         $('#editBtn', root).onclick = () => { closeDrawer(true); window.renderReferralForm(rowNumber); };
         const sch = $('#scheduleBtn', root);
         if (sch) sch.onclick = async () => { if (!await UX.confirm({ title: 'Mark as scheduled?', message: `${r['Patient Name']} will move to “Scheduled or not booking”.`, confirmLabel: 'Mark as scheduled' })) return; try { await api().setBookingStatus(rowNumber, 'Scheduled'); showToast('Marked as scheduled.'); reopen('info'); } catch (e) { showToast(errorMessage(e), 'error'); } };
@@ -240,6 +241,18 @@
           try { await api().deleteReferral(rowNumber); showToast('Referral deleted.'); closeDrawer(true); renderReferralHome(); } catch (e) { showToast(errorMessage(e), 'error'); }
         };
         $$('.referral-pdf-btn', root).forEach((b) => { b.onclick = () => api().openReferralPdf(rowNumber, Number(b.dataset.pdfIndex)).catch((e) => showToast(errorMessage(e), 'error')); });
+        const attachBtn = $('#attachReferralPdfBtn', root);
+        if (attachBtn) attachBtn.onclick = async () => {
+          try {
+            const picked = await api().chooseReferralPdfs();
+            if (!picked?.length) return;
+            if (existingPdfCount + picked.length > 3) { showToast(`This patient can have at most 3 referral PDFs. ${3 - existingPdfCount} slot(s) remain.`, 'error'); return; }
+            const res = await api().attachReferralPdfs(rowNumber, picked);
+            if (res?.moveWarnings?.length) showToast(`PDF attached, but ${res.moveWarnings.join(' ')}`, 'error');
+            else showToast('Referral PDF saved to clinic data and original removed.');
+            reopen('info');
+          } catch (e) { showToast(errorMessage(e), 'error'); }
+        };
         wireScriptCopyButtons();
         $$('.copy-contact-dr-script', root).forEach((b) => { b.onclick = () => copyToClipboard(decodeURIComponent(b.dataset.copyText || ''), 'Script'); });
         const now = $('#useNowContact', root); if (now) now.onclick = () => { $('#contactDateTime', root).value = nowUsDateTime(); };

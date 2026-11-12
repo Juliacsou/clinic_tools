@@ -347,9 +347,13 @@ async function copyPdfForReferral(sourcePath, rowNumber, patientName, ordinal = 
   await fd.read(buf, 0, 5, 0);
   await fd.close();
   if (buf.toString() !== '%PDF-') throw new Error('Referral document must be a valid PDF file.');
+  await fsp.mkdir(referralsDir(), { recursive: true });
   const stamp = new Date().toISOString().replace(/[-:T.Z]/g,'').slice(0,17);
   const filename = `REF${String(rowNumber - 1).padStart(5,'0')}_${sanitizeName(patientName)}_${stamp}_${ordinal}.pdf`;
-  await fsp.copyFile(sourcePath, path.join(referralsDir(), filename));
+  const destPath = path.join(referralsDir(), filename);
+  await fsp.copyFile(sourcePath, destPath);
+  const stat = await fsp.stat(destPath);
+  if (!stat || stat.size < 5) throw new Error('Referral PDF copy verification failed.');
   return filename;
 }
 
@@ -372,12 +376,55 @@ async function recycleReferralSources(sourcePaths) {
       const resolved = path.resolve(sourcePath);
       if (path.dirname(resolved) === destDir) continue;
       if (!fs.existsSync(resolved)) continue;
-      await shell.trashItem(resolved);
+      try {
+        await shell.trashItem(resolved);
+      } catch {
+        // Fallback to direct deletion below if Recycle Bin is unavailable for this path.
+      }
+      if (fs.existsSync(resolved)) {
+        try {
+          await fsp.unlink(resolved);
+        } catch {
+          await fsp.chmod(resolved, 0o666).catch(() => {});
+          await fsp.unlink(resolved);
+        }
+      }
     } catch (err) {
-      warnings.push(`Could not move ${path.basename(sourcePath)} to the Recycle Bin: ${err.message || err}`);
+      warnings.push(`Could not remove ${path.basename(sourcePath)} from its original location: ${err.message || err}`);
     }
   }
   return warnings;
+}
+
+async function markMatchingReferralScheduled(formData = {}) {
+  const { wb, ws } = await loadWorkbook();
+  const statusCol = DATA_HEADERS.indexOf('Booking Status') + 1;
+  const explicitRow = Number(formData._referralRow || formData.referralRow || 0);
+  const targetName = normalizeHeader(formData.patientName);
+  const targetDob = String(formData.dob || '').trim();
+  let matchedRow = null;
+
+  if (Number.isInteger(explicitRow) && explicitRow >= 2 && explicitRow <= ws.rowCount && hasValue(ws.getCell(explicitRow, 2).value)) {
+    matchedRow = explicitRow;
+  } else if (targetName) {
+    for (let r = 2; r <= ws.rowCount; r++) {
+      if (!hasValue(ws.getCell(r, 2).value)) continue;
+      const rec = rowToRecord(ws.getRow(r));
+      if (['Scheduled', 'Not booked'].includes(rec._status)) continue;
+      if (normalizeHeader(rec['Patient Name']) !== targetName) continue;
+      if (targetDob && rec['DOB'] && rec['DOB'] !== targetDob) continue;
+      matchedRow = r;
+      break;
+    }
+  }
+
+  if (!matchedRow) return { updated: false, rowNumber: null };
+  const currentVal = String(ws.getCell(matchedRow, statusCol).value || '').trim();
+  if (currentVal.toLowerCase() !== 'scheduled') {
+    ws.getCell(matchedRow, statusCol).value = 'Scheduled';
+    await saveWorkbook(wb);
+  }
+  return { updated: true, rowNumber: matchedRow };
 }
 
 function queueWrite(fn) {
@@ -458,13 +505,32 @@ ipcMain.handle('referrals:update', (_, rowNumber, data) => queueWrite(async () =
   if (rowNumber < 2 || rowNumber > ws.rowCount || !hasValue(ws.getCell(rowNumber,2).value)) throw new Error('Referral not found.');
   writeRecord(ws, rowNumber, data);
   if (Array.isArray(data._pdfSourcePaths) && data._pdfSourcePaths.length) {
-    const existing = parseReferralFiles(ws.getCell(rowNumber, DATA_HEADERS.indexOf('Referral PDF') + 1).value);
+    const pdfCol = DATA_HEADERS.indexOf('Referral PDF') + 1;
+    const existing = parseReferralFiles(ws.getCell(rowNumber, pdfCol).value);
     const files = await copyReferralPdfList(data._pdfSourcePaths, rowNumber, data['Patient Name'], existing);
-    ws.getCell(rowNumber, DATA_HEADERS.indexOf('Referral PDF') + 1).value = files.join('||');
+    ws.getCell(rowNumber, pdfCol).value = files.join('||');
+    ws.getCell(rowNumber, pdfCol).font = { name: 'Aptos', size: 10, color: { argb: 'FF008000' } };
   }
   await saveWorkbook(wb);
   const moveWarnings = await recycleReferralSources(data._pdfSourcePaths);
   return { rowNumber, moveWarnings };
+}));
+
+ipcMain.handle('referrals:attach-pdf', (_, rowNumber, pdfSourcePaths) => queueWrite(async () => {
+  const { wb, ws } = await loadWorkbook();
+  const r = Number(rowNumber);
+  if (!Number.isInteger(r) || r < 2 || r > ws.rowCount || !hasValue(ws.getCell(r, 2).value)) throw new Error('Referral not found.');
+  const sources = Array.isArray(pdfSourcePaths) ? pdfSourcePaths.filter(Boolean) : [];
+  if (!sources.length) return { rowNumber: r, moveWarnings: [] };
+  const patientName = String(ws.getCell(r, DATA_HEADERS.indexOf('Patient Name') + 1).value || 'patient').trim();
+  const pdfCol = DATA_HEADERS.indexOf('Referral PDF') + 1;
+  const existing = parseReferralFiles(ws.getCell(r, pdfCol).value);
+  const files = await copyReferralPdfList(sources, r, patientName, existing);
+  ws.getCell(r, pdfCol).value = files.join('||');
+  ws.getCell(r, pdfCol).font = { name: 'Aptos', size: 10, color: { argb: 'FF008000' } };
+  await saveWorkbook(wb);
+  const moveWarnings = await recycleReferralSources(sources);
+  return { rowNumber: r, files, moveWarnings };
 }));
 
 ipcMain.handle('referrals:add-contact', (_, rowNumber, payload) => queueWrite(async () => {
@@ -1461,7 +1527,11 @@ async function updateIncompleteRecord(rowNumber,patch={}){
   if(patch.status!==undefined){if(!['Follow-up','No Answer','Scheduled','Will Not Schedule','Incomplete'].includes(patch.status))throw new Error('Invalid Schedule Incomplete status.');set('Status',patch.status);} if(patch.comments!==undefined)set('Comments',patch.comments);
   if(patch.followUpNotes!==undefined){if(!headerMap[INCOMPLETE_FOLLOWUP_HEADER])throw new Error('The Follow-Up Notes column could not be created in the Schedule Incomplete workbook. Close the file if it is open in Excel and try again.');set(INCOMPLETE_FOLLOWUP_HEADER,patch.followUpNotes);}
   if(patch.formData){set('Date',formData.date?toExcelDate(formData.date,false):null);set('Patient Name',formData.patientName||'');set('Age',hasValue(formData.age)?Number(formData.age):null);set('DOB',formData.dob?toExcelDate(formData.dob,false):null);set('Parent Name',formData.parentName||'');set('Phone',formData.phone||'');set('Email',formData.email||'');set('Grade',formData.grade||'');set('Referral Source',formData.referralSource||'');set('Form Data JSON',JSON.stringify(formData));ws.getCell(r,headerMap['Date']).numFmt='mm/dd/yyyy';ws.getCell(r,headerMap['DOB']).numFmt='mm/dd/yyyy';}
-  set('Last Updated',new Date().toISOString()); await wb.xlsx.writeFile(incompleteWorkbookPath()); return {rowNumber:r};
+  set('Last Updated',new Date().toISOString()); await wb.xlsx.writeFile(incompleteWorkbookPath());
+  if(patch.status==='Scheduled'){
+    try{await markMatchingReferralScheduled({...formData,patientName:formData?.patientName||current.patientName,dob:formData?.dob||current.dob});}catch(err){console.error('Could not mark referral scheduled from incomplete:',err);}
+  }
+  return {rowNumber:r};
 }
 async function deleteIncompleteRecord(rowNumber){const {wb,ws}=await loadIncompleteWorkbook();const r=Number(rowNumber);if(!Number.isInteger(r)||r<2||r>ws.rowCount)throw new Error('Schedule Incomplete row was not found.');await backupIncompleteWorkbook();ws.spliceRows(r,1);await wb.xlsx.writeFile(incompleteWorkbookPath());return {deleted:true};}
 ipcMain.handle('incomplete:list',async()=>listIncompleteRecords());
