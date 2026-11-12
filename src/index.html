@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visual Health Clinic Tools</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="ux.css">
+  <link rel="stylesheet" href="weekly.css">
+  <link rel="stylesheet" href="weekly-dashboard.css">
+  <link rel="stylesheet" href="monthly.css">
+</head>
+<body>
+  <div class="brand-strip" aria-hidden="true"></div>
+  <div class="app-shell" id="appShell">
+    <aside id="sideNav" class="side-nav" aria-label="Main navigation">
+      <div class="side-brand" id="brandHome" role="button" tabindex="0" title="Home">
+        <img class="logo-full" src="clinic-logo.png" alt="Visual Health & Learning Center">
+        <img class="logo-mark" src="icon.png" alt="Visual Health & Learning Center">
+      </div>
+      <button type="button" class="btn btn-primary side-new" id="quickNewIC" title="New Initial Contact">
+        <span class="side-new-ico" data-ico="plus"></span><span class="nav-label">New Initial Contact</span>
+      </button>
+      <nav class="side-links">
+        <button type="button" data-nav="home" style="--mc:#15a9e8"><span class="nav-ico" data-ico="home"></span><span class="nav-label">Home</span></button>
+        <div class="nav-group" aria-hidden="true"></div>
+        <button type="button" data-nav="referral" style="--mc:#15a9e8"><span class="nav-ico" data-ico="referral"></span><span class="nav-label">Referral Follow-Up</span></button>
+        <button type="button" data-nav="setup" style="--mc:#15bf35"><span class="nav-ico" data-ico="setup"></span><span class="nav-label">Initial Contact &amp; Setup</span></button>
+        <button type="button" data-nav="incomplete" style="--mc:#f08a24"><span class="nav-ico" data-ico="incomplete"></span><span class="nav-label">Schedule Incomplete</span></button>
+        <button type="button" data-nav="payment" style="--mc:#e0b400"><span class="nav-ico" data-ico="payment"></span><span class="nav-label">Payment Tracking</span></button>
+        <button type="button" data-nav="cancellations" style="--mc:#e1192d"><span class="nav-ico" data-ico="cancel"></span><span class="nav-label">Exam Cancelations</span></button>
+        <button type="button" data-nav="weekly" style="--mc:#138a91"><span class="nav-ico" data-ico="weekly"></span><span class="nav-label">Weekly Report</span></button>
+        <div class="wr-nav-children" aria-label="Weekly Report pages">
+          <button type="button" data-nav="weekly-dashboard" class="wr-nav-child"><span class="wr-sub-mark" aria-hidden="true"></span><span class="nav-label">Dashboard</span></button>
+          <button type="button" data-nav="weekly-weeks" class="wr-nav-child"><span class="wr-sub-mark" aria-hidden="true"></span><span class="nav-label">All weeks</span></button>
+        </div>
+        <button type="button" data-nav="monthly" style="--mc:#5372bb"><span class="nav-ico" data-ico="weekly"></span><span class="nav-label">Monthly Report</span></button>
+        <button type="button" data-nav="waitlist" style="--mc:#6517a8"><span class="nav-ico" data-ico="waitlist"></span><span class="nav-label">Waitlist</span></button>
+      </nav>
+      <div class="side-foot">
+        <button type="button" data-nav="settings" style="--mc:#44546b"><span class="nav-ico" data-ico="settings"></span><span class="nav-label">Settings</span></button>
+        <div class="side-version nav-label">Version 2.26.4</div>
+      </div>
+    </aside>
+
+    <div class="main-col">
+      <header class="topbar">
+        <button id="menuToggle" class="icon-btn" type="button" aria-label="Collapse or expand the menu" title="Collapse or expand the menu"></button>
+        <div class="page-title" id="subbrand">Home</div>
+        <div class="top-actions">
+          <button id="homeBtn" class="btn btn-ghost" type="button" hidden>Home</button>
+          <button id="primaryActionBtn" class="btn btn-primary" type="button" hidden></button>
+        </div>
+      </header>
+      <main id="app" class="page"></main>
+    </div>
+  </div>
+
+  <div id="drawerRoot"></div>
+  <div id="dialogRoot"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="us-dates.js"></script>
+  <script src="waitlist-rules.js"></script>
+  <script src="initial-family.js"></script>
+  <script src="renderer.js"></script>
+  <script src="ux-core.js"></script>
+  <script src="ux-pages.js"></script>
+  <script src="weekly-charts.js"></script>
+  <script src="weekly-slots.js"></script>
+  <script src="weekly-ahead.js"></script>
+  <script src="weekly-page.js"></script>
+  <script src="monthly-page.js"></script>
+  <script src="cancellation-list.js"></script>
+  <script src="ux-pages2.js"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {createRequire}=require('node:module');
+const ExcelJS=require('exceljs');
+const {PDFDocument}=require('pdf-lib');
+const electronPackage=require('electron/package.json');
+const exceljsPackage=require('exceljs/package.json');
+const fromExcelJS=createRequire(require.resolve('exceljs/package.json'));
+const uuidPackage=fromExcelJS('uuid/package.json');
+const uuid=fromExcelJS('uuid');
+const semverMajor=v=>Number(String(v).split('.')[0]);
+assert.equal(electronPackage.version,'43.8.3','Electron version changed without review');
+assert.equal(exceljsPackage.version,'4.4.0','ExcelJS version changed without review');
+assert(semverMajor(uuidPackage.version)>=11,'ExcelJS is using a vulnerable uuid version');
+assert.equal(typeof uuid.v4,'function','ExcelJS needs the CommonJS uuid v4 interface');
+assert.match(uuid.v4(),/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+(async()=>{
+  // Exercise ExcelJS actual XLSX serialization and readback (not Excel COM).
+  const book=new ExcelJS.Workbook();
+  const sheet=book.addWorksheet('weekly');
+  sheet.addRow(['WEEK ENDING','Metric','Formula']);
+  sheet.addRow([new Date('2026-10-23T12:00:00Z'),13,{formula:'B2*2',result:26}]);
+  const bytes=await book.xlsx.writeBuffer();
+  const reopened=new ExcelJS.Workbook();
+  await reopened.xlsx.load(bytes);
+  assert.equal(reopened.getWorksheet('weekly').getCell('B2').value,13);
+  assert.equal(reopened.getWorksheet('weekly').getCell('C2').value.formula,'B2*2');
+  const pdf=await PDFDocument.create();
+  pdf.addPage([200,200]);
+  assert((await pdf.save()).length>0);
+  console.log('Electron, uuid 11 CJS, ExcelJS XLSX read/write and pdf-lib: PASS');
+})().catch(error=>{console.error(error);process.exitCode=1;});

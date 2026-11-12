@@ -1,0 +1,88 @@
+{
+  "name": "visual-health-clinic-tools",
+  "version": "2.26.8",
+  "description": "Local clinic workflow tools for Visual Health and Learning Center",
+  "main": "src/main.js",
+  "author": "Visual Health and Learning Center",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build:portable": "electron-builder --win portable",
+    "build:dir": "electron-builder --win dir",
+    "test:monthly": "node tests/monthly.test.js && node tests/monthly-csv-filtering.test.js && node tests/monthly-workspace.test.js && node tests/monthly-write-real-adapter.test.js && node tests/monthly-table-ui.test.js && node tests/monthly-duplicate-history.test.js && node tests/monthly-excel-duplicate.test.js && node tests/monthly-office-followup.test.js && node tests/monthly-year-separators.test.js && node tests/monthly-write-verification.test.js && node tests/monthly-physical-excel.test.js",
+    "test:weekly": "node tests/us-dates.test.js && node tests/weekly.test.js && node tests/weekly-three-csv.test.js && node tests/weekly-three-csv-integration.test.js && node tests/weekly-three-csv-ui.test.js && node tests/weekly-workspace.test.js && node tests/weekly-ui.test.js && node tests/weekly-excel-bridge.test.js && node tests/weekly-layout.test.js && node tests/weekly-physical-write.test.js && node tests/weekly-template-row.test.js && node tests/data-directory.test.js && node tests/weekly-chart-history.test.js && node tests/weekly-history-table.test.js && node tests/weekly-dashboard.test.js && node tests/waitlist-rules.test.js",
+    "test:waitlist": "node tests/waitlist-rules.test.js",
+    "test:family": "node tests/initial-family.test.js",
+    "test:deps": "node tests/dependency-compat.test.js",
+    "test:workflow": "node tests/v224-workflows.test.js",
+    "test:all": "npm run test:monthly && npm run test:weekly && npm run test:family && npm run test:deps && npm run test:workflow && npm run test:cancel-list && npm run test:security-policy && npm run test:integrity",
+    "test:cancel-list": "node tests/cancellation-list.test.js",
+    "test:security-policy": "node tests/audit-policy.test.js",
+    "test:integrity": "node tests/project-integrity.test.js"
+  },
+  "dependencies": {
+    "exceljs": "4.4.0",
+    "pdf-lib": "1.17.1"
+  },
+  "devDependencies": {
+    "electron": "43.8.3",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.visualhealth.clinictools",
+    "productName": "Visual Health Clinic Tools",
+    "asar": true,
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/Referral_Follow_Up.xlsx",
+        "to": "template/Referral_Follow_Up.xlsx"
+      },
+      {
+        "from": "assets/Initial_Contact_Tracking_SIMULATION.xlsx",
+        "to": "template/Initial_Contact_Tracking_SIMULATION.xlsx"
+      },
+      {
+        "from": "assets/Initial_Contact_Form_2026.pdf",
+        "to": "template/Initial_Contact_Form_2026.pdf"
+      },
+      {
+        "from": "assets/Exam_Cancellations_SIMULATION.xlsx",
+        "to": "template/Exam_Cancellations_SIMULATION.xlsx"
+      },
+      {
+        "from": "assets/New_Patient_Setup.xlsx",
+        "to": "template/New_Patient_Setup.xlsx"
+      },
+      {
+        "from": "assets/Schedule_Incomplete.xlsx",
+        "to": "template/Schedule_Incomplete.xlsx"
+      },
+      {
+        "from": "src/weekly-legacy-excel.ps1",
+        "to": "weekly/weekly-legacy-excel.ps1"
+      }
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "artifactName": "VHLC Clinic Tools.${ext}",
+      "icon": "build/icon.ico"
+    },
+    "artifactName": "VHLC Clinic Tools.${ext}",
+    "asarUnpack": [
+      "src/weekly-legacy-excel.ps1",
+      "src/monthly-legacy-excel.ps1"
+    ]
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "11.1.1"
+    }
+  }
+}

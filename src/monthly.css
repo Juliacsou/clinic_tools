@@ -1,0 +1,37 @@
+/* Monthly Report — consistent with Weekly Report and the clinic's existing UI. */
+.mr-page{max-width:1500px;margin:0 auto}
+.mr-page .wr-dashboard-head{margin-bottom:20px}
+.mr-page .wr-block-heading{border-bottom:1px solid #e2e8f0}
+.mr-page .wr-block-heading h2{color:#2c507b}
+.mr-import-choice{display:flex;flex-wrap:wrap;gap:20px;padding:8px 0}
+.mr-import-choice label{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:#34516a;cursor:pointer}
+.mr-import-choice input{accent-color:#4777a4}
+.mr-table-scroll{width:100%;max-width:100%;overflow:auto;border:1px solid #dce7ee;border-radius:11px}
+.mr-upload-table,.mr-data-table{border-collapse:collapse;width:100%;font-size:13px;line-height:1.4;color:#25445a}
+.mr-upload-table th,.mr-upload-table td,.mr-data-table th,.mr-data-table td{padding:11px 15px;border-bottom:1px solid #e6edf2;text-align:left;vertical-align:middle}
+.mr-upload-table thead th,.mr-data-table thead th{background:#edf4f8;font-size:12px;color:#38566d;font-weight:750;white-space:nowrap}
+.mr-upload-table tbody th,.mr-data-table tbody th{font-weight:650;color:#294b61}
+.mr-upload-table tbody tr:last-child th,.mr-upload-table tbody tr:last-child td,.mr-data-table tbody tr:last-child th,.mr-data-table tbody tr:last-child td{border-bottom:0}
+.mr-upload-table tbody tr:hover,.mr-data-table tbody tr:hover{background:#f6fafc}
+.mr-upload-table{min-width:560px}
+.mr-data-table{min-width:600px}
+.mr-data-table th:nth-child(2){width:55%}
+.mr-data-table th:nth-child(3){width:22%}
+.mr-upload-name{overflow-wrap:anywhere;max-width:380px}
+.mr-col-letter{width:65px;min-width:65px;font-weight:700;color:#7a8ea0;font-size:12px}
+.mr-table-value{font-size:17px;font-weight:750;font-variant-numeric:tabular-nums;color:#173e54;white-space:nowrap}
+.mr-table-month{font-weight:700;color:#173e54}
+.mr-row-actions{white-space:nowrap;text-align:right!important;min-width:126px;color:#96a8b4}
+.mr-row-actions .btn+.btn{margin-left:6px}
+.mr-adjusted{display:inline-block;margin-left:9px;font-size:11px;font-weight:600;color:#986823}
+.mr-comment-row td[colspan]{padding-top:10px;padding-bottom:10px}
+.mr-comment-row textarea{display:block;width:100%;min-height:63px;max-width:100%;box-sizing:border-box;margin:0;border:1px solid #cddde8;border-radius:7px;padding:9px 11px;font:inherit;resize:vertical}
+.mr-comment-text{white-space:pre-wrap;overflow-wrap:anywhere;color:#294b61}
+.mr-history{min-width:1590px}
+.mr-history td{max-width:230px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mr-history th{white-space:normal;min-width:78px}
+.mr-history th:first-child{min-width:126px}
+.mr-history .mr-notes{max-width:220px;text-align:left}
+.mr-history .wr-col-letter{display:block;font-size:10px;color:#657c90}
+.mr-history tbody tr:hover{background:#f5faff}
+@media(max-width:650px){.mr-upload-table th,.mr-upload-table td,.mr-data-table th,.mr-data-table td{padding:9px 10px}.mr-row-actions .btn{padding:6px 8px}}
