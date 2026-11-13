@@ -28,28 +28,14 @@ try {
     if ($tab.Name.Trim().ToLowerInvariant() -eq 'weekly') { $sheet = $tab; break }
   }
   if ($null -eq $sheet) { throw 'The workbook does not contain a Weekly worksheet.' }
+  $phase = 'read column headers'
+  $headers = @()
+  for ($c=1; $c -le 32; $c++) { $headers += [string]$sheet.Cells.Item(1,$c).Value2 }
+  if ($headers[0].Trim().ToLowerInvariant() -ne 'week ending') { throw 'The selected workbook has no Week Ending header at A1.' }
   # Only inspect occupied dates in column A, not formatted blank rows across the workbook.
   $phase = 'locate last report week'
   $last = [int]$sheet.Cells.Item($sheet.Rows.Count,1).End(-4162).Row # xlUp
   if ($last -gt 20000) { throw 'The Weekly worksheet exceeds the supported 20,000 report rows.' }
-  $phase = 'read column headers'
-  $maxReadRow = [Math]::Max(1, $last)
-  $sheetMatrix = $sheet.Range($sheet.Cells.Item(1,1),$sheet.Cells.Item($maxReadRow,32)).Value2
-  $matrixRowBase = 1
-  $matrixColBase = 1
-  if ($sheetMatrix -is [Array]) {
-    $matrixRowBase = $sheetMatrix.GetLowerBound(0)
-    $matrixColBase = $sheetMatrix.GetLowerBound(1)
-  }
-  $headers = @()
-  for ($c=1; $c -le 32; $c++) {
-    if ($sheetMatrix -is [Array]) {
-      $headers += [string]$sheetMatrix.GetValue($matrixRowBase, $matrixColBase + $c - 1)
-    } else {
-      $headers += [string]$sheet.Cells.Item(1,$c).Value2
-    }
-  }
-  if ($headers[0].Trim().ToLowerInvariant() -ne 'week ending') { throw 'The selected workbook has no Week Ending header at A1.' }
   function Column-Letter([int]$n) {
     $name = ''
     while ($n -gt 0) { $n--; $name = [char](65 + ($n % 26)) + $name; $n = [int][Math]::Floor($n / 26) }
@@ -57,17 +43,26 @@ try {
   }
   $weeks = @()
   $historyRows = @()
+  $historyMatrix = $null
   $notesCol = 0
   for ($h=0; $h -lt $headers.Count; $h++) { if ($headers[$h].Trim().ToLowerInvariant() -eq 'comments') { $notesCol=$h+1; break } }
+  $historyRowBase = 1
+  $historyColBase = 1
+  if ($job.action -eq 'history' -and $last -ge 2) {
+    # Read a contiguous block in ONE Excel COM call instead of invoking COM
+    # once per cell. This is significantly faster on older corporate PCs.
+    $phase = 'read report history'
+    $historyMatrix = $sheet.Range($sheet.Cells.Item(2,2),$sheet.Cells.Item($last,18)).Value2
+    if ($historyMatrix -is [Array]) {
+      $historyRowBase = $historyMatrix.GetLowerBound(0)
+      $historyColBase = $historyMatrix.GetLowerBound(1)
+    }
+  }
   $selectedRow = 0
   $latest = ''
   $lastDatedRow = 1
   for ($r=2; $r -le $last; $r++) {
-    if ($sheetMatrix -is [Array]) {
-      $raw = $sheetMatrix.GetValue($matrixRowBase + $r - 1, $matrixColBase)
-    } else {
-      $raw = $sheet.Cells.Item($r,1).Value2
-    }
+    $raw = $sheet.Cells.Item($r,1).Value2
     $iso = ''
     if ($null -eq $raw -or $raw -eq '') { continue }
     try {
@@ -83,8 +78,8 @@ try {
         # History is READ ONLY. Return numeric report values only, never patient data.
         $values = @{}
         for ($c=2; $c -le 18; $c++) {
-          if ($sheetMatrix -is [Array]) {
-            $item = $sheetMatrix.GetValue($matrixRowBase + $r - 1, $matrixColBase + $c - 1)
+          if ($historyMatrix -is [Array]) {
+            $item = $historyMatrix.GetValue($historyRowBase + $r - 2, $historyColBase + $c - 2)
           } else {
             $item = $sheet.Cells.Item($r,$c).Value2
           }
@@ -98,8 +93,8 @@ try {
         }
         $note = ''
         if ($notesCol -gt 0 -and $job.includeNotes) {
-          if ($sheetMatrix -is [Array] -and $notesCol -ge 1 -and $notesCol -le 32) {
-            $noteItem = $sheetMatrix.GetValue($matrixRowBase + $r - 1, $matrixColBase + $notesCol - 1)
+          if ($historyMatrix -is [Array] -and $notesCol -ge 2 -and $notesCol -le 18) {
+            $noteItem = $historyMatrix.GetValue($historyRowBase + $r - 2, $historyColBase + $notesCol - 2)
           } else {
             $noteItem = $sheet.Cells.Item($r,$notesCol).Value2
           }

@@ -1,6 +1,6 @@
 {
   "name": "visual-health-clinic-tools",
-  "version": "2.27.1",
+  "version": "2.27.2",
   "description": "Local clinic workflow tools for Visual Health and Learning Center",
   "main": "src/main.js",
   "author": "Visual Health and Learning Center",
@@ -35,7 +35,11 @@
     "asar": true,
     "files": [
       "src/**/*",
-      "package.json"
+      "package.json",
+      "!**/*.map",
+      "!node_modules/exceljs/dist/**",
+      "!node_modules/pdf-lib/dist/**",
+      "!node_modules/pdf-lib/es/**"
     ],
     "extraResources": [
       {
