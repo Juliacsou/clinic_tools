@@ -29,18 +29,24 @@
         <button type="button" data-nav="incomplete" style="--mc:#f08a24"><span class="nav-ico" data-ico="incomplete"></span><span class="nav-label">Schedule Incomplete</span></button>
         <button type="button" data-nav="payment" style="--mc:#e0b400"><span class="nav-ico" data-ico="payment"></span><span class="nav-label">Payment Tracking</span></button>
         <button type="button" data-nav="cancellations" style="--mc:#e1192d"><span class="nav-ico" data-ico="cancel"></span><span class="nav-label">Exam Cancelations</span></button>
-        <button type="button" data-nav="weekly" style="--mc:#138a91"><span class="nav-ico" data-ico="weekly"></span><span class="nav-label">Weekly Report</span></button>
-        <div class="wr-nav-children" aria-label="Weekly Report pages">
-          <button type="button" data-nav="weekly-dashboard" class="wr-nav-child"><span class="wr-sub-mark" aria-hidden="true"></span><span class="nav-label">Dashboard</span></button>
-          <button type="button" data-nav="weekly-weeks" class="wr-nav-child"><span class="wr-sub-mark" aria-hidden="true"></span><span class="nav-label">All weeks</span></button>
-        </div>
-        <button type="button" data-nav="monthly" style="--mc:#5372bb"><span class="nav-ico" data-ico="weekly"></span><span class="nav-label">Monthly Report</span></button>
+        <button type="button" data-nav="reports" style="--mc:#138a91"><span class="nav-ico" data-ico="weekly"></span><span class="nav-label">Reports</span></button>
         <button type="button" data-nav="waitlist" style="--mc:#6517a8"><span class="nav-ico" data-ico="waitlist"></span><span class="nav-label">Waitlist</span></button>
       </nav>
       <div class="side-foot">
         <button type="button" data-nav="settings" style="--mc:#44546b"><span class="nav-ico" data-ico="settings"></span><span class="nav-label">Settings</span></button>
-        <div class="side-version nav-label">Version 2.26.4</div>
+        <div class="side-version nav-label">Version 2.27.0</div>
       </div>
+    </aside>
+    <aside id="reportsSubNav" class="reports-subnav" aria-label="Reports menu" hidden>
+      <div class="reports-subnav-head">
+        <span class="reports-subnav-kicker">REPORTS</span>
+        <div class="reports-subnav-title">Reports &amp; Charts</div>
+      </div>
+      <nav class="reports-subnav-links">
+        <button type="button" data-report-nav="weekly-dashboard"><span class="nav-ico" data-ico="chart"></span><span>Dashboard</span></button>
+        <button type="button" data-report-nav="weekly-weeks"><span class="nav-ico" data-ico="weekly"></span><span>Weekly Report</span></button>
+        <button type="button" data-report-nav="monthly"><span class="nav-ico" data-ico="monthly"></span><span>Monthly Report</span></button>
+      </nav>
     </aside>
 
     <div class="main-col">

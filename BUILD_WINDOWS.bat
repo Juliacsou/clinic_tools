@@ -3,7 +3,7 @@ setlocal EnableExtensions DisableDelayedExpansion
 pushd "%~dp0" || goto :error
 
 echo ==========================================================
-echo Visual Health Clinic Tools v2.26.9 - Build Portable EXE
+echo Visual Health Clinic Tools v2.27.0 - Build Portable EXE
 echo ==========================================================
 where node >nul 2>nul || (echo ERRO: Node.js nao encontrado. & goto :error)
 where npm >nul 2>nul || (echo ERRO: npm nao encontrado. & goto :error)

@@ -491,10 +491,25 @@
     const go = {
       home: () => window.renderDashboard(), referral: () => window.renderReferralHome(), setup: () => window.renderSetupLanding(),
       incomplete: () => window.renderScheduleIncompleteLanding(), payment: () => window.renderInitialLanding(),
-      cancellations: () => window.renderCancellationLanding(), waitlist: () => window.renderWaitlistLanding(), weekly: () => window.renderWeeklyReport(), 'weekly-dashboard': () => window.renderWeeklyReport(), 'weekly-weeks': () => window.renderWeeklyReportWeeks(), monthly: () => window.renderMonthlyReport(), settings: () => window.renderSettings()
+      cancellations: () => window.renderCancellationLanding(), waitlist: () => window.renderWaitlistLanding(),
+      reports: () => window.renderWeeklyReport(), weekly: () => window.renderWeeklyReport(),
+      'weekly-dashboard': () => window.renderWeeklyReport(), 'weekly-weeks': () => window.renderWeeklyReportWeeks(),
+      monthly: () => window.renderMonthlyReport(), settings: () => window.renderSettings()
     };
-    $$('[data-nav]').forEach((b) => { b.onclick = () => go[b.dataset.nav](); });
-    $('#menuToggle').onclick = () => UX.setCollapsed(!$('#appShell').classList.contains('collapsed'));
+    $$('[data-nav]').forEach((b) => { b.onclick = () => go[b.dataset.nav]?.(); });
+    $$('[data-report-nav]').forEach((b) => { b.onclick = () => go[b.dataset.reportNav]?.(); });
+    $('#menuToggle').onclick = () => {
+      const shell = $('#appShell');
+      if (shell.classList.contains('reports-open')) {
+        const sub = $('#reportsSubNav');
+        if (sub) {
+          sub.hidden = !sub.hidden;
+          shell.classList.toggle('reports-subnav-collapsed', sub.hidden);
+        }
+        return;
+      }
+      UX.setCollapsed(!shell.classList.contains('collapsed'));
+    };
     $('#quickNewIC').onclick = () => window.renderInitialForm();
     const brand = $('#brandHome');
     brand.onclick = () => window.renderDashboard();

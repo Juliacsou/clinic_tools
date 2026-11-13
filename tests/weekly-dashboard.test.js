@@ -61,5 +61,42 @@ async function tick(){await Promise.resolve();await new Promise(done=>setImmedia
  await window.renderWeeklyDashboard();await tick();
  assert.match(app.innerHTML,/Workbook locked/);
  assert.doesNotMatch(app.innerHTML,/<svg/);
+
+ // Test Patients Scheduled buckets (by day, week, month) and Monthly Report chart on the unified Dashboard.
+ const setupSample=[
+  {patientName:'A',scheduledOn:'2026-10-10'},
+  {patientName:'B',scheduledOn:'2026-10-10'},
+  {patientName:'C',scheduledOn:'2026-10-12'},
+  {patientName:'D',initialContactDate:'2026-11-05'}
+ ];
+ const byDay=helpers.buildScheduledBuckets(setupSample,{unit:'day',range:'custom',start:'2026-10-10',end:'2026-10-12'});
+ assert.equal(byDay.length,3);
+ assert.deepEqual(Array.from(byDay,b=>b.values.S),[2,0,1]);
+ const byWeek=helpers.buildScheduledBuckets(setupSample,{unit:'week',range:'custom',start:'2026-10-01',end:'2026-11-10'});
+ assert.ok(byWeek.length>=6);
+ assert.equal(byWeek.reduce((s,b)=>s+b.values.S,0),4);
+ const byMonth=helpers.buildScheduledBuckets(setupSample,{unit:'month',range:'custom',start:'2026-10-01',end:'2026-11-30'});
+ assert.equal(byMonth.length,2);
+ assert.deepEqual(Array.from(byMonth,b=>b.values.S),[3,1]);
+
+ stubAPI={
+  getWeeklyChartHistory:async()=>({connected:true,rows:cases}),
+  listMonthlyReports:async()=>({months:[{month:'2026-09',inExcel:true,values:{D:24,I:180}},{month:'2026-10',inExcel:true,values:{D:31,I:210}}]}),
+  listSetup:async()=>({records:setupSample})
+ };
+ window.clinicAPI=stubAPI;
+ await window.renderWeeklyDashboard();await tick();
+ assert.match(app.innerHTML,/wd-scheduled/);
+ assert.match(app.innerHTML,/Patients Scheduled/);
+ assert.match(app.innerHTML,/wd-monthly/);
+ assert.match(app.innerHTML,/OM Exams Done/);
+
+ const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+ assert.match(html,/data-nav="reports"/);
+ assert.match(html,/id="reportsSubNav"/);
+ assert.match(html,/data-report-nav="weekly-dashboard"/);
+ assert.match(html,/data-report-nav="weekly-weeks"/);
+ assert.match(html,/data-report-nav="monthly"/);
+
  console.log('Interactive dates, multi-series tooltips, period totals, both sections, missing-value rules and workbook errors: PASS');
 })().catch(e=>{console.error(e);process.exitCode=1});

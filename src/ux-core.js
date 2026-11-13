@@ -16,6 +16,8 @@
     payment: '<circle cx="12" cy="12" r="9"/><path d="M14.5 9.2A2.8 2.2 0 0 0 12 8c-1.4 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1.1 2-2.5 2a2.8 2.2 0 0 1-2.5-1.2"/><path d="M12 6v2M12 16v2"/>',
     cancel: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M10 14l4 4M14 14l-4 4"/>',
     weekly: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 14h3M14 14h3M8 18h3"/>',
+    chart: '<path d="M4 19h16"/><path d="M7 15l4-4 3 3 5-6"/><circle cx="7" cy="15" r="1.5"/><circle cx="11" cy="11" r="1.5"/><circle cx="14" cy="14" r="1.5"/><circle cx="19" cy="8" r="1.5"/>',
+    monthly: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="M7 13h4v4H7zM13 13h4M13 17h4"/>',
     waitlist: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     settings: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
     chev: '<path d="M9 6l6 6-6 6"/>',
@@ -43,21 +45,55 @@
     'Schedule Incomplete': 'incomplete',
     'Payment Tracking': 'payment',
     'Exam Cancelations': 'cancellations',
-    'Waitlist': 'waitlist', 'Monthly Reports': 'monthly', 'Monthly Report': 'monthly', 'Weekly Report':'weekly', 'Weekly Report Dashboard':'weekly-dashboard', 'Weekly Report Weeks':'weekly-weeks',
+    'Waitlist': 'waitlist', 'Monthly Reports': 'monthly', 'Monthly Report': 'monthly', 'Weekly Report':'weekly-dashboard', 'Weekly Report Dashboard':'weekly-dashboard', 'Reports Dashboard':'weekly-dashboard', 'Reports':'weekly-dashboard', 'Weekly Report Weeks':'weekly-weeks',
     'Settings': 'settings'
   };
+  const REPORT_KEYS = new Set(['weekly-dashboard', 'weekly-weeks', 'monthly']);
+
+  function restoreSavedCollapse() {
+    let stored = null;
+    try { stored = localStorage.getItem('vh.nav.collapsed'); } catch (e) { /* ignore */ }
+    const value = stored === null ? window.innerWidth < 1280 : stored === '1';
+    shell.classList.toggle('collapsed', value);
+    const t = $('#menuToggle');
+    if (t) t.setAttribute('aria-expanded', String(!value));
+  }
 
   function setActiveNav(label) {
     let key = NAV_BY_LABEL[label];
     if (!key && /initial|setup/i.test(label || '')) key = 'setup';
+    const isReport = REPORT_KEYS.has(key);
+    const mainKey = isReport ? 'reports' : key;
     $$('[data-nav]').forEach((b) => {
-      const on = b.dataset.nav === key;
+      const on = b.dataset.nav === mainKey || b.dataset.nav === key;
       b.classList.toggle('is-active', on);
       if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
+    $$('[data-report-nav]').forEach((b) => {
+      const on = b.dataset.reportNav === key;
+      b.classList.toggle('is-active', on);
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
+    const subNav = $('#reportsSubNav');
+    if (isReport) {
+      shell.classList.add('collapsed', 'reports-open');
+      shell.classList.remove('reports-subnav-collapsed');
+      if (subNav) subNav.hidden = false;
+      const t = $('#menuToggle');
+      if (t) t.setAttribute('aria-expanded', 'false');
+    } else {
+      const wasReport = shell.classList.contains('reports-open');
+      shell.classList.remove('reports-open', 'reports-subnav-collapsed');
+      if (subNav) subNav.hidden = true;
+      if (wasReport) restoreSavedCollapse();
+    }
   }
 
   function setCollapsed(value, remember = true) {
+    if (shell.classList.contains('reports-open')) {
+      shell.classList.add('collapsed');
+      return;
+    }
     shell.classList.toggle('collapsed', value);
     const t = $('#menuToggle');
     if (t) t.setAttribute('aria-expanded', String(!value));
