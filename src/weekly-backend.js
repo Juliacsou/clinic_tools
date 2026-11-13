@@ -10,7 +10,7 @@ const excel=require('./weekly-excel');
 const history=require('./weekly-history');
 const {AUTO_COLS,MANUAL_COLS,computeMetrics,periods,isoDate}=core;
 const EDITABLE=new Set([...AUTO_COLS,...MANUAL_COLS,'Q']);
-const TYPES=new Set(['VDE Doctor-Tech','VIP Doctor-Tech','VDE Doctor Only','VIP Doctor Only','NP 99203','EP 99213','Patient Consultation','Virtual Orientation','Office VT','Virtual VT','Home Maintenance','Follow-Up']);
+const TYPES=new Set(['VDE Doctor-Tech','VIP Doctor-Tech','VDE Doctor Only','VIP Doctor Only','NP 99203','EP 99213','Patient Consultation','Virtual Orientation','Office VT','Virtual VT','Home Maintenance','Follow-Up','Office Follow-Up']);
 const clean=v=>String(v??'').trim();
 function count(v,key){if(v===null||v===undefined||v==='')return null;if(!Number.isSafeInteger(v)||v<0)throw new Error(`Enter a valid whole number for ${key}.`);return v;}
 function safeSummary(s){

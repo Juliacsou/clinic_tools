@@ -51,7 +51,13 @@ LABEL_MAP.set('follow up','Follow-Up');
 LABEL_MAP.set('f/u','Follow-Up');
 // Crystal PM uses Office Follow-Up; retain old generic label for existing drafts.
 LABEL_MAP.set('office f/u','Office Follow-Up');
+LABEL_MAP.set('office followup','Office Follow-Up');
 LABEL_MAP.set('home maintance','Home Maintenance');
+LABEL_MAP.set('consultation','Patient Consultation');
+LABEL_MAP.set('consult','Patient Consultation');
+LABEL_MAP.set('pt consultation','Patient Consultation');
+LABEL_MAP.set('pt consult','Patient Consultation');
+LABEL_MAP.set('patient consult','Patient Consultation');
 function typeOf(v){return LABEL_MAP.get(norm(v))||null;}
 // RFC4180 CSV tokenizer (quoted newlines, quoted delimiters, BOM, CRLF).
 function csvRows(source) {

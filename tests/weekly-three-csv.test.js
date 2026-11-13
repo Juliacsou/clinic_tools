@@ -35,7 +35,20 @@ const replaced=annual.addFiles(both,[{...t,fileHash:'new-file'}],1);
 assert.equal(replaced.files.length,2);
 assert.equal(core.computeMetrics({ahead:annual.removeFile(replaced,1)}).E,undefined);
 assert.throws(()=>parse('10/29/2026,Virtual Orientation,Confirmed\n','ahead'),/outside/);
-assert.throws(()=>parse('10/30/2027,Virtual Orientation,Confirmed\n','ahead'),/outside/);
+// Regression: Doctors export containing Office Follow-Up (or unusual types) must be accepted flexibly.
+const flexibleDoctors=parse('10/30/2026,VDE Doctor-Tech,Confirmed\n10/31/2026,Patient Consultation,Confirmed\n11/01/2026,Office Follow-Up,Confirmed\n11/02/2026,Special Review,Confirmed\n','ahead');
+assert.doesNotThrow(()=>slots.verify(flexibleDoctors,'ahead-doctors'),'Office Follow-Up and custom types must not throw unexpected appointment types');
+const flexibleTherapists=parse('10/30/2026,Virtual Orientation,Confirmed\n10/31/2026,Office Follow-Up,Confirmed\n11/01/2026,Special Review,Confirmed\n','ahead');
+assert.doesNotThrow(()=>slots.verify(flexibleTherapists,'ahead-therapists'),'Therapists export with extra/unusual types must not throw');
+const fDoc={...flexibleDoctors,slotId:'ahead-doctors',fileName:'dr-with-followup.csv',fileHash:'hash-flex-doc',importedAt:'2026-10-29T12:00:00Z'};
+const fTher={...flexibleTherapists,slotId:'ahead-therapists',fileName:'ther-with-followup.csv',fileHash:'hash-flex-ther',importedAt:'2026-10-29T12:00:00Z'};
+const mergedFlex=annual.addFiles(annual.addFiles(null,[fDoc]),[fTher]);
+assert.equal(mergedFlex.files.length,2);
+const flexMetrics=core.computeMetrics({ahead:mergedFlex});
+assert.equal(flexMetrics.B.value,1);
+assert.equal(flexMetrics.D.value,1);
+assert.equal(flexMetrics.E.value,1);
+
 const nextYear=core.periods('2027-02-28');
 assert.equal(nextYear.ahead.start,'2027-03-01');assert.equal(nextYear.ahead.end,'2028-02-29');
 console.log('Exactly 3 CSV fields, one-year range, imports, status rules, VT Sessions, and split Ahead: PASS');

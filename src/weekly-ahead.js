@@ -26,8 +26,14 @@
     const v={total:integer(c.total,'total'),canceled:integer(c.canceled,'canceled'),missed:integer(c.missed,'missed'),valid:integer(c.valid,'valid')};
     if(v.total!==v.canceled+v.missed+v.valid)throw new Error('Invalid appointment totals for '+type+'.');
     if(v.total===0)continue;
-    if(claimed.has(type))throw new Error('Appointment type "'+type+'" appears in both "'+claimed.get(type)+'" and "'+f.fileName+'". Remove or replace the existing file to prevent double counting.');
-    claimed.set(type,f.fileName);f.counts[type]=v;counts[type]=v;
+    const AHEAD_METRIC_TYPES=new Set(['VDE Doctor-Tech','VIP Doctor-Tech','VDE Doctor Only','VIP Doctor Only','NP 99203','Patient Consultation','Virtual Orientation']);
+    if(AHEAD_METRIC_TYPES.has(type)){
+     if(claimed.has(type))throw new Error('Appointment type "'+type+'" appears in both "'+claimed.get(type)+'" and "'+f.fileName+'". Remove or replace the existing file to prevent double counting.');
+     claimed.set(type,f.fileName);
+    }
+    f.counts[type]=v;
+    if(!counts[type])counts[type]=v;
+    else counts[type]={total:counts[type].total+v.total,valid:counts[type].valid+v.valid,canceled:counts[type].canceled+v.canceled,missed:counts[type].missed+v.missed};
    }
    for(const [type,total]of Object.entries(source.unrecognized||{})){
     const n=integer(total,'unrecognized appointments');

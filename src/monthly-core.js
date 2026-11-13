@@ -34,7 +34,7 @@ function validateSlot(source,slot){
  if(slot==='all'){
   const doctor=entries.some(([type])=>DOCTOR_ALLOWED.includes(type));
   const therapist=entries.some(([type])=>THERAPIST_ALLOWED.includes(type));
-  if(!doctor||!therapist)throw new Error('Full Schedule CSV must contain both Doctors and Therapists appointments. Use the separate CSV option if your export includes only one schedule.');
+  if(!doctor&&!therapist)throw new Error('Full Schedule CSV contains no recognized Doctor or Therapist appointments.');
   return true;
  }
  // A Crystal PM schedule contains additional appointment types. They must not

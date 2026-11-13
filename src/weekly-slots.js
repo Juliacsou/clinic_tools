@@ -17,12 +17,26 @@
   const slot=get(id);if(!slot)throw new Error('Invalid CSV upload field.');
   if(slot.group==='weekly')return true; // All appointment types belong in the combined weekly export.
   const recognized=Object.entries(file?.counts||{}).filter(([,n])=>n?.total>0).map(([type])=>type);
-  const wrong=recognized.filter(t=>!slot.allowed.includes(t));
-  if(wrong.length)throw new Error('Wrong export for '+slot.title+': unexpected appointment types: '+wrong.join(', ')+'.');
-  if(id==='ahead-doctors'&&!recognized.some(t=>doctor.includes(t)))throw new Error('Doctors CSV has no recognized Doctor exam appointments. Confirm that the export includes the medical appointment types.');
+  if(id==='ahead-doctors'){
+   // Flexible import: unexpected or unusual appointment types (such as Office Follow-Up or custom clinic types)
+   // are ignored for Ahead metrics and must never block the file.
+   // Only reject if the file has none of the Doctor exam or Consultation appointment types.
+   const hasDoctorOrConsult=recognized.some(t=>doctor.includes(t)||t==='Patient Consultation');
+   if(!hasDoctorOrConsult){
+    throw new Error('Wrong export for Ahead - Doctors: no Doctor exam or Consultation appointments found. Confirm that you selected the Doctors schedule.');
+   }
+  }
   if(id==='ahead-therapists'){
-   if(!recognized.includes('Virtual Orientation'))throw new Error('Therapists CSV must contain Virtual Orientation appointments. Check the export filter.');
-   if(Object.values(file?.unrecognized||{}).some(n=>n>0))throw new Error('Therapists Ahead CSV must contain only Virtual Orientation appointments. Check the export filter.');
+   // Flexible import: therapists schedule may contain other types or unrecognized appointments;
+   // we only care about extracting Virtual Orientation.
+   // Only reject if it contains Doctor medical exam appointments (user selected Doctors CSV instead of Therapists)
+   // or has zero Virtual Orientation appointments.
+   if(recognized.some(t=>doctor.includes(t))){
+    throw new Error('Wrong export for Ahead - Therapists: contains Doctor medical exam appointments. Confirm that you selected the Therapists schedule.');
+   }
+   if(!recognized.includes('Virtual Orientation')){
+    throw new Error('Wrong export for Ahead - Therapists: no Virtual Orientation appointments found. Confirm that the export includes Virtual Orientation.');
+   }
   }
   return true;
  }
