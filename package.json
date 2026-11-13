@@ -1,6 +1,6 @@
 {
   "name": "visual-health-clinic-tools",
-  "version": "2.27.3",
+  "version": "2.27.4",
   "description": "Local clinic workflow tools for Visual Health and Learning Center",
   "main": "src/main.js",
   "author": "Visual Health and Learning Center",
@@ -16,7 +16,8 @@
     "test:family": "node tests/initial-family.test.js",
     "test:deps": "node tests/dependency-compat.test.js",
     "test:workflow": "node tests/v224-workflows.test.js",
-    "test:all": "npm run test:monthly && npm run test:weekly && npm run test:family && npm run test:deps && npm run test:workflow && npm run test:cancel-list && npm run test:security-policy && npm run test:integrity",
+    "test:amblyopia": "node tests/amblyopia-strabismus.test.js",
+    "test:all": "npm run test:monthly && npm run test:weekly && npm run test:family && npm run test:deps && npm run test:workflow && npm run test:cancel-list && npm run test:security-policy && npm run test:integrity && npm run test:amblyopia",
     "test:cancel-list": "node tests/cancellation-list.test.js",
     "test:security-policy": "node tests/audit-policy.test.js",
     "test:integrity": "node tests/project-integrity.test.js"

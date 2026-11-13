@@ -32,7 +32,8 @@ const DATA_HEADERS = [
   'Grade',
   'Referring Doctor',
   'Office Name',
-  'Referring Doctor Phone'
+  'Referring Doctor Phone',
+  'Amblyopia/Strabismus'
 ];
 const SYSTEM_REFERRAL_HEADERS = new Set(['Referral PDF', 'Booking Status']);
 
@@ -231,7 +232,7 @@ async function loadWorkbook() {
     if (guide) {
       const existing = new Set();
       for (let r = 2; r <= guide.rowCount; r++) existing.add(String(guide.getCell(r,1).value || '').trim());
-      for (const [field, type] of [['Parent Name','Text'],['Phone','Text'],['Email','Text'],['Grade','Text'],['Referring Doctor','Text'],['Office Name','Text'],['Referring Doctor Phone','Text / phone number']]) {
+      for (const [field, type] of [['Parent Name','Text'],['Phone','Text'],['Email','Text'],['Grade','Text'],['Referring Doctor','Text'],['Office Name','Text'],['Referring Doctor Phone','Text / phone number'],['Amblyopia/Strabismus','Text (Yes/No)']]) {
         if (!existing.has(field)) guide.addRow([field, type]);
       }
     }
@@ -245,7 +246,7 @@ function ensureSchema(ws) {
   let changed = false;
   DATA_HEADERS.forEach((header, idx) => {
     const cell = ws.getCell(1, idx + 1);
-    const existing = cell.value == null ? '' : String(cell.value);
+    const existing = cell.value == null ? '' : String(cell.value).trim();
     // The original 18 columns are never moved or renamed. New demographic
     // fields are appended so existing client data remains in place.
     if (idx < 18 && existing !== header) {
@@ -256,7 +257,7 @@ function ensureSchema(ws) {
       cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF17345C' } };
       cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-      const widths = { 'Parent Name': 24, 'Phone': 18, 'Email': 30, 'Grade': 14, 'Referring Doctor': 24, 'Office Name': 28, 'Referring Doctor Phone': 20 };
+      const widths = { 'Parent Name': 24, 'Phone': 18, 'Email': 30, 'Grade': 14, 'Referring Doctor': 24, 'Office Name': 28, 'Referring Doctor Phone': 20, 'Amblyopia/Strabismus': 22 };
       ws.getColumn(idx + 1).width = widths[header] || 20;
       changed = true;
     } else if (idx >= 18 && existing !== header) {
@@ -1300,6 +1301,13 @@ ipcMain.handle('cancellations:delete',(_,rowNumber)=>queueWrite(()=>deleteCancel
 
 function localTodayISO(){const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');}
 // ---------------- New Patient Setup ----------------
+function isAmblyopiaStrabismus(formData){
+  if(!formData) return 'No';
+  if(String(formData.amblyopiaStrabismus||'').toLowerCase()==='yes'||formData.amblyopiaStrabismus===true) return 'Yes';
+  if(formData.doctorAmblyopia||formData.doctorStrabismus||formData.sym_amblyopia) return 'Yes';
+  return 'No';
+}
+
 const SETUP_FIELDS = [
   { key:'initialContactDate', label:'Initial Contact Date' },
   { key:'patientName', label:'Patient Name' },
@@ -1319,19 +1327,51 @@ const SETUP_FIELDS = [
   { key:'schedulePatientCrystal', label:'Schedule Patient on Crystal' },
   { key:'sendInitialEmail', label:'Send Initial Email' },
   { key:'notes', label:'Notes' },
-  { key:'scheduledOn', label:'Scheduled On' }
+  { key:'scheduledOn', label:'Scheduled On' },
+  { key:'amblyopiaStrabismus', label:'Amblyopia/Strabismus' }
 ];
 const SETUP_DATE_KEYS = new Set(['initialContactDate','dob','examDate','parentMeetingDate','scheduledOn']);
 async function migrateSetupWorkbook(){
   const filePath=setupWorkbookPath();if(!fs.existsSync(filePath))return false;
   const wb=new ExcelJS.Workbook();await wb.xlsx.readFile(filePath);const ws=wb.getWorksheet('New Patient Setup')||wb.worksheets[0];
   if(!ws)throw new Error('Missing New Patient Setup worksheet.');
-  for(let c=1;c<=ws.columnCount;c++)if(String(ws.getCell(1,c).value||'').trim()==='Scheduled On')return false;
-  // Preserve historical rows: the actual scheduling date cannot be inferred reliably from Called.
-  const c=ws.columnCount+1;ws.getCell(1,c).value='Scheduled On';ws.getCell(1,c).style=JSON.parse(JSON.stringify(ws.getCell(1,c-1).style||{}));ws.getColumn(c).width=18;
-  const temp=filePath+'.v224-'+process.pid+'.tmp.xlsx';
-  try{await wb.xlsx.writeFile(temp);const check=new ExcelJS.Workbook();await check.xlsx.readFile(temp);
-    if(check.worksheets[0].getCell(1,c).value!=='Scheduled On')throw new Error('Scheduled On migration verification failed');
+  const existingHeaders = new Set();
+  for(let c=1;c<=ws.columnCount;c++){
+    const val=String(ws.getCell(1,c).value||'').trim();
+    if(val) existingHeaders.add(val);
+  }
+  let changed = false;
+  if(!existingHeaders.has('Scheduled On')){
+    let last=0;
+    for(let c=1;c<=ws.columnCount;c++){if(ws.getCell(1,c).value)last=c;}
+    const c=last+1;
+    ws.getCell(1,c).value='Scheduled On';
+    const prevStyle=ws.getCell(1,last).style;
+    if(prevStyle) ws.getCell(1,c).style=JSON.parse(JSON.stringify(prevStyle));
+    ws.getColumn(c).width=18;
+    existingHeaders.add('Scheduled On');
+    changed = true;
+  }
+  if(!existingHeaders.has('Amblyopia/Strabismus')){
+    let last=0;
+    for(let c=1;c<=ws.columnCount;c++){if(ws.getCell(1,c).value)last=c;}
+    const c=last+1;
+    ws.getCell(1,c).value='Amblyopia/Strabismus';
+    const prevStyle=ws.getCell(1,last).style;
+    if(prevStyle) ws.getCell(1,c).style=JSON.parse(JSON.stringify(prevStyle));
+    ws.getColumn(c).width=22;
+    existingHeaders.add('Amblyopia/Strabismus');
+    changed = true;
+  }
+  if(!changed) return false;
+  const temp=filePath+'.v227-'+process.pid+'.tmp.xlsx';
+  try{
+    await wb.xlsx.writeFile(temp);
+    const check=new ExcelJS.Workbook();await check.xlsx.readFile(temp);
+    const checkWs=check.worksheets[0];
+    const checkHeaders=new Set();
+    for(let c=1;c<=checkWs.columnCount;c++) checkHeaders.add(String(checkWs.getCell(1,c).value||'').trim());
+    if(!checkHeaders.has('Amblyopia/Strabismus'))throw new Error('Amblyopia/Strabismus migration verification failed');
     await backupSetupWorkbook();await fsp.rename(temp,filePath);
   }finally{await fsp.unlink(temp).catch(()=>{});}
   return true;
@@ -1375,7 +1415,8 @@ function setupPayloadFromInitial(formData){
     initialContactDate:formData.date||'', patientName:formData.patientName||'', age:formData.age||'', dob:formData.dob||'',
     parentName:formData.parentName||'', phone:formData.phone||'', email:formData.email||'', grade:formData.grade||'', referralSource:formData.referralSource||'',
     examType, examDate, examTime, parentMeetingDate:formData.parentMeetingDate||'', parentMeetingTime:formData.parentMeetingTime||'',
-    addPatientCrystal:'', schedulePatientCrystal:'', sendInitialEmail:'', notes:'', scheduledOn:localTodayISO()
+    addPatientCrystal:'', schedulePatientCrystal:'', sendInitialEmail:'', notes:'', scheduledOn:localTodayISO(),
+    amblyopiaStrabismus: isAmblyopiaStrabismus(formData)
   };
 }
 async function appendSetupRecord(data){
@@ -1387,13 +1428,23 @@ async function appendSetupRecord(data){
     if(name===normalizeHeader(data.patientName)&&(!data.dob||dob===data.dob)) {
       // An older setup record may have been created before the scheduling date was captured.
       // When it is saved again from a newly completed Initial Contact, capture today's confirmation.
+      let updated = false;
       const onCell=ws.getCell(r,headerMap['Scheduled On']);
-      if(!hasValue(onCell.value)) {await backupSetupWorkbook();onCell.value=toExcelDate(localTodayISO(),false);onCell.numFmt='mm/dd/yyyy';await wb.xlsx.writeFile(setupWorkbookPath());}
+      if(onCell && !hasValue(onCell.value)) {onCell.value=toExcelDate(localTodayISO(),false);onCell.numFmt='mm/dd/yyyy';updated=true;}
+      if(headerMap['Amblyopia/Strabismus'] && data.amblyopiaStrabismus) {
+        const ambCell=ws.getCell(r,headerMap['Amblyopia/Strabismus']);
+        if(!hasValue(ambCell.value) || data.amblyopiaStrabismus === 'Yes') {
+          ambCell.value = data.amblyopiaStrabismus;
+          updated = true;
+        }
+      }
+      if(updated) {await backupSetupWorkbook();await wb.xlsx.writeFile(setupWorkbookPath());}
       return {rowNumber:r,workbookPath:setupWorkbookPath(),worksheet:ws.name,existing:true};
     }
   }
   await backupSetupWorkbook();
   if(!data.scheduledOn)data={...data,scheduledOn:localTodayISO()};
+  if(!data.amblyopiaStrabismus)data={...data,amblyopiaStrabismus:isAmblyopiaStrabismus(data)};
   let target=ws.rowCount+1;
   while(target>2&&!hasValue(ws.getCell(target-1,headerMap['Patient Name']).value)) target--;
   if(target<2) target=2;
@@ -1467,16 +1518,46 @@ ipcMain.handle('setup:save-form-data',(_,rowNumber,formData)=>queueWrite(()=>sav
 
 // ---------------- Schedule Incomplete ----------------
 const INCOMPLETE_FOLLOWUP_HEADER='Follow-Up Notes';
-const INCOMPLETE_HEADERS=['Date','Patient Name','Age','DOB','Parent Name','Phone','Email','Grade','Referral Source','Status','Comments','Last Updated','Form Data JSON'];
+const INCOMPLETE_AMBLYOPIA_HEADER='Amblyopia/Strabismus';
+const INCOMPLETE_HEADERS=['Date','Patient Name','Age','DOB','Parent Name','Phone','Email','Grade','Referral Source','Amblyopia/Strabismus','Status','Comments','Last Updated','Form Data JSON'];
 async function backupIncompleteWorkbook(){
   if(!fs.existsSync(incompleteWorkbookPath())) return;
   const stamp=new Date().toISOString().replace(/[-:T.Z]/g,'').slice(0,17);
   await fsp.copyFile(incompleteWorkbookPath(),path.join(incompleteBackupsDir(),`Schedule_Incomplete_${stamp}.xlsx`));
 }
+async function ensureIncompleteAmblyopiaColumn(wb,ws,headerMap){
+  if(headerMap[INCOMPLETE_AMBLYOPIA_HEADER])return true;
+  try{
+    await backupIncompleteWorkbook();
+    let last=0;for(const k of Object.keys(headerMap)){if(k)last=Math.max(last,headerMap[k]);}
+    const col=last+1,src=ws.getCell(1,headerMap['Form Data JSON']||headerMap['Comments']||last),cell=ws.getCell(1,col);
+    cell.value=INCOMPLETE_AMBLYOPIA_HEADER;
+    if(src&&src.style)cell.style=JSON.parse(JSON.stringify(src.style));
+    ws.getColumn(col).width=22;
+    const jsonCol=headerMap['Form Data JSON'];
+    if(jsonCol){
+      for(let r=2;r<=ws.rowCount;r++){
+        const rowCell=ws.getCell(r,col);
+        if(!hasValue(rowCell.value)){
+          try{
+            const fData=JSON.parse(initialPlainValue(ws.getCell(r,jsonCol).value)||'{}');
+            rowCell.value=isAmblyopiaStrabismus(fData);
+          }catch{
+            rowCell.value='No';
+          }
+        }
+      }
+    }
+    await wb.xlsx.writeFile(incompleteWorkbookPath());
+    headerMap[INCOMPLETE_AMBLYOPIA_HEADER]=col;
+    return true;
+  }catch(err){console.error('Could not add the Amblyopia/Strabismus column to Schedule Incomplete:',err);return false;}
+}
 async function loadIncompleteWorkbook(){
   await ensureDataFiles(); const wb=new ExcelJS.Workbook(); await wb.xlsx.readFile(incompleteWorkbookPath());
   const ws=wb.getWorksheet('Schedule Incomplete')||wb.worksheets[0]; if(!ws) throw new Error('Schedule Incomplete workbook is missing its worksheet.');
   const headerMap={}; for(let c=1;c<=ws.columnCount;c++) headerMap[String(ws.getCell(1,c).value||'').trim()]=c;
+  await ensureIncompleteAmblyopiaColumn(wb,ws,headerMap);
   const missing=INCOMPLETE_HEADERS.filter(h=>!headerMap[h]); if(missing.length) throw new Error(`Schedule Incomplete workbook is missing columns: ${missing.join(', ')}.`);
   await ensureIncompleteFollowUpColumn(wb,ws,headerMap);
   return {wb,ws,headerMap};
@@ -1500,9 +1581,11 @@ async function ensureIncompleteFollowUpColumn(wb,ws,headerMap){
   }catch(err){incompleteFollowUpFailedAt=Date.now();console.error('Could not add the Follow-Up Notes column:',err);return false;}
 }
 function incompleteRowToRecord(ws,headerMap,r){
-  const val=(label,isDate=false)=>initialPlainValue(ws.getCell(r,headerMap[label]).value,isDate);
+  const val=(label,isDate=false)=>headerMap[label]?initialPlainValue(ws.getCell(r,headerMap[label]).value,isDate):'';
   let formData={}; try{formData=JSON.parse(val('Form Data JSON')||'{}')}catch{}
-  return {_row:r,date:val('Date',true),patientName:val('Patient Name'),age:val('Age'),dob:val('DOB',true),parentName:val('Parent Name'),phone:val('Phone'),email:val('Email'),grade:val('Grade'),referralSource:val('Referral Source'),status:val('Status')||'Incomplete',comments:val('Comments'),lastUpdated:val('Last Updated'),followUpAvailable:!!headerMap[INCOMPLETE_FOLLOWUP_HEADER],followUpNotes:headerMap[INCOMPLETE_FOLLOWUP_HEADER]?val(INCOMPLETE_FOLLOWUP_HEADER):'',formData};
+  const ambVal = headerMap[INCOMPLETE_AMBLYOPIA_HEADER] ? val(INCOMPLETE_AMBLYOPIA_HEADER) : '';
+  const isAmb = ambVal || isAmblyopiaStrabismus(formData);
+  return {_row:r,date:val('Date',true),patientName:val('Patient Name'),age:val('Age'),dob:val('DOB',true),parentName:val('Parent Name'),phone:val('Phone'),email:val('Email'),grade:val('Grade'),referralSource:val('Referral Source'),amblyopiaStrabismus:isAmb,status:val('Status')||'Incomplete',comments:val('Comments'),lastUpdated:val('Last Updated'),followUpAvailable:!!headerMap[INCOMPLETE_FOLLOWUP_HEADER],followUpNotes:headerMap[INCOMPLETE_FOLLOWUP_HEADER]?val(INCOMPLETE_FOLLOWUP_HEADER):'',formData};
 }
 async function listIncompleteRecords(){ const {ws,headerMap}=await loadIncompleteWorkbook(); const out=[]; for(let r=2;r<=ws.rowCount;r++){if(!hasValue(ws.getCell(r,headerMap['Patient Name']).value))continue;out.push(incompleteRowToRecord(ws,headerMap,r));} return {records:out,workbookPath:incompleteWorkbookPath(),worksheet:ws.name}; }
 async function getIncompleteRecord(rowNumber){const x=await listIncompleteRecords();return x.records.find(r=>r._row===Number(rowNumber))||null;}
@@ -1516,7 +1599,7 @@ async function appendIncompleteRecord(formData,comments=''){
     }
   }
   await backupIncompleteWorkbook(); const r=ws.rowCount+1; const now=new Date();
-  const values={'Date':formData.date?toExcelDate(formData.date,false):now,'Patient Name':name,'Age':hasValue(formData.age)?Number(formData.age):null,'DOB':formData.dob?toExcelDate(formData.dob,false):null,'Parent Name':formData.parentName||'','Phone':formData.phone||'','Email':formData.email||'','Grade':formData.grade||'','Referral Source':formData.referralSource||'','Status':'Follow-up','Comments':comments||'','Last Updated':now.toISOString(),'Form Data JSON':JSON.stringify(formData)};
+  const values={'Date':formData.date?toExcelDate(formData.date,false):now,'Patient Name':name,'Age':hasValue(formData.age)?Number(formData.age):null,'DOB':formData.dob?toExcelDate(formData.dob,false):null,'Parent Name':formData.parentName||'','Phone':formData.phone||'','Email':formData.email||'','Grade':formData.grade||'','Referral Source':formData.referralSource||'','Amblyopia/Strabismus':isAmblyopiaStrabismus(formData),'Status':'Follow-up','Comments':comments||'','Last Updated':now.toISOString(),'Form Data JSON':JSON.stringify(formData)};
   for(const h of INCOMPLETE_HEADERS){const cell=ws.getCell(r,headerMap[h]);cell.value=values[h]??null;if(['Date','DOB'].includes(h)&&cell.value instanceof Date)cell.numFmt='mm/dd/yyyy';}
   await wb.xlsx.writeFile(incompleteWorkbookPath()); return {rowNumber:r,workbookPath:incompleteWorkbookPath(),worksheet:ws.name};
 }
@@ -1526,7 +1609,23 @@ async function updateIncompleteRecord(rowNumber,patch={}){
   const set=(h,v)=>{ws.getCell(r,headerMap[h]).value=v===undefined?null:v};
   if(patch.status!==undefined){if(!['Follow-up','No Answer','Scheduled','Will Not Schedule','Incomplete'].includes(patch.status))throw new Error('Invalid Schedule Incomplete status.');set('Status',patch.status);} if(patch.comments!==undefined)set('Comments',patch.comments);
   if(patch.followUpNotes!==undefined){if(!headerMap[INCOMPLETE_FOLLOWUP_HEADER])throw new Error('The Follow-Up Notes column could not be created in the Schedule Incomplete workbook. Close the file if it is open in Excel and try again.');set(INCOMPLETE_FOLLOWUP_HEADER,patch.followUpNotes);}
-  if(patch.formData){set('Date',formData.date?toExcelDate(formData.date,false):null);set('Patient Name',formData.patientName||'');set('Age',hasValue(formData.age)?Number(formData.age):null);set('DOB',formData.dob?toExcelDate(formData.dob,false):null);set('Parent Name',formData.parentName||'');set('Phone',formData.phone||'');set('Email',formData.email||'');set('Grade',formData.grade||'');set('Referral Source',formData.referralSource||'');set('Form Data JSON',JSON.stringify(formData));ws.getCell(r,headerMap['Date']).numFmt='mm/dd/yyyy';ws.getCell(r,headerMap['DOB']).numFmt='mm/dd/yyyy';}
+  if(patch.formData){
+    set('Date',formData.date?toExcelDate(formData.date,false):null);
+    set('Patient Name',formData.patientName||'');
+    set('Age',hasValue(formData.age)?Number(formData.age):null);
+    set('DOB',formData.dob?toExcelDate(formData.dob,false):null);
+    set('Parent Name',formData.parentName||'');
+    set('Phone',formData.phone||'');
+    set('Email',formData.email||'');
+    set('Grade',formData.grade||'');
+    set('Referral Source',formData.referralSource||'');
+    if(headerMap[INCOMPLETE_AMBLYOPIA_HEADER]) set(INCOMPLETE_AMBLYOPIA_HEADER, isAmblyopiaStrabismus(formData));
+    set('Form Data JSON',JSON.stringify(formData));
+    ws.getCell(r,headerMap['Date']).numFmt='mm/dd/yyyy';
+    ws.getCell(r,headerMap['DOB']).numFmt='mm/dd/yyyy';
+  } else if(patch.amblyopiaStrabismus !== undefined && headerMap[INCOMPLETE_AMBLYOPIA_HEADER]) {
+    set(INCOMPLETE_AMBLYOPIA_HEADER, patch.amblyopiaStrabismus);
+  }
   set('Last Updated',new Date().toISOString()); await wb.xlsx.writeFile(incompleteWorkbookPath());
   if(patch.status==='Scheduled'){
     try{await markMatchingReferralScheduled({...formData,patientName:formData?.patientName||current.patientName,dob:formData?.dob||current.dob});}catch(err){console.error('Could not mark referral scheduled from incomplete:',err);}

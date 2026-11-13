@@ -10,6 +10,7 @@
   const dash = (v) => (v ? esc(v) : '<span class="muted">—</span>');
   const facts = (pairs) => `<dl class="facts2">${pairs.map(([k, v, full]) => `<div class="${full ? 'full' : ''}"><dt>${esc(k)}</dt><dd class="${full ? 'pre' : ''}">${v}</dd></div>`).join('')}</dl>`;
   const asRow = (v) => (v !== null && v !== undefined && typeof v !== 'object' && Number.isFinite(Number(v)) ? Number(v) : null);
+  const isAmbPill = (v) => String(v || '').trim().toLowerCase() === 'yes' ? '<span class="badge" style="background:#ede9fe;color:#6b21a8;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:6px;font-weight:600">Amb/Strab</span>' : '';
   const settingsLinks = () => $$('[data-goto-settings]').forEach((b) => { b.onclick = () => window.renderSettings(); });
   const sourceHtml = (path) => `<span>Excel file</span><span class="src-name" title="${esc(path)}">${esc(baseName(path))}</span><button type="button" class="btn btn-quiet btn-sm" data-goto-settings>Change in Settings</button>`;
   const simBanner = (what) => `<div class="banner warn" role="status"><span><strong>Using the built-in practice workbook.</strong> Nothing saved in ${esc(what)} reaches the clinic’s real monthly spreadsheet until you connect it.</span><button type="button" class="btn btn-sm" data-goto-settings>Connect your Excel</button></div>`;
@@ -153,7 +154,7 @@
     loading('Loading referrals…');
     let recs;
     try { recs = await api().listReferrals(); } catch (e) { fatal(e, renderReferralHome); return; }
-    const cPatient = { key: 'patient', label: 'Patient', sort: (r) => String(r['Patient Name'] || '').toLowerCase(), html: (r) => `<div class="cell-main">${esc(r['Patient Name'])}</div><div class="sub">${esc([r['Age'] ? `${r['Age']} yrs` : '', r['Grade'] ? `Grade ${r['Grade']}` : ''].filter(Boolean).join(' · '))}</div>` };
+    const cPatient = { key: 'patient', label: 'Patient', sort: (r) => String(r['Patient Name'] || '').toLowerCase(), html: (r) => `<div class="cell-main">${esc(r['Patient Name'])}${isAmbPill(r['Amblyopia/Strabismus'])}</div><div class="sub">${esc([r['Age'] ? `${r['Age']} yrs` : '', r['Grade'] ? `Grade ${r['Grade']}` : ''].filter(Boolean).join(' · '))}</div>` };
     const cBy = (pri) => ({ key: 'by', label: 'Referred by', p: pri, sort: (r) => String(r['Referring Doctor'] || '').toLowerCase(), html: (r) => `<div>${dash(r['Referring Doctor'])}</div><div class="sub clip" title="${esc(r['Office Name'] || '')}">${esc(r['Office Name'] || '')}</div>` });
     const cEval = { key: 'eval', label: 'Evaluation', p: 3, html: (r) => `<div class="clip" title="${esc(r['Recommended Evaluation'] || '')}">${dash(r['Recommended Evaluation'])}</div>` };
     const cAttempts = { key: 'attempts', label: 'Attempts', sort: refAttempts, html: (r) => { const n = refAttempts(r); return `<span class="dots" title="${n} of 3 contact attempts logged">${[0, 1, 2].map((i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`; } };
@@ -210,7 +211,7 @@
     const tabs = [
       { key: 'contact', label: 'Contact', html: `<ol class="steps">${steps}</ol>${addContact}` },
       { key: 'info', label: 'Patient and referral', html: `<div class="dsection">${facts([
-        ['Patient', T(r['Patient Name'])], ['Referral date', fmtDate(r['Date'])], ['Date of birth', fmtDate(r['DOB'])], ['Age', T(r['Age'])],
+        ['Patient', T(r['Patient Name'])], ['Amblyopia / Strabismus', T(r['Amblyopia/Strabismus'] || 'No')], ['Referral date', fmtDate(r['Date'])], ['Date of birth', fmtDate(r['DOB'])], ['Age', T(r['Age'])],
         ['Parent', T(r['Parent Name'])], ['Phone', T(r['Phone'])], ['Email', T(r['Email'])], ['Grade', T(r['Grade'])],
         ['Referring doctor', T(r['Referring Doctor'])], ['Doctor phone', T(r['Referring Doctor Phone'])], ['Office', T(r['Office Name'])], ['Recommended evaluation', T(r['Recommended Evaluation'])],
         ['Concerns or symptoms', T(r['Patient/Parent Concerns or Symptoms']), true]])}</div>${pdfs}` },
@@ -230,7 +231,25 @@
       footer: '<button type="button" class="btn btn-danger" id="deleteReferralBtn">Delete referral</button><span class="spacer"></span><button type="button" class="btn" data-close>Close</button>',
       onMount: (root) => {
         const reopen = async (t) => { markClean(); await renderReferralHome(); openReferralDrawer(rowNumber, t); };
-        $('#startInitialBtn', root).onclick = () => { closeDrawer(true); window.renderInitialForm({ patientName: r['Patient Name'] || '', age: r['Age'] || '', dob: r['DOB'] || '', parentName: r['Parent Name'] || '', phone: r['Phone'] || '', email: r['Email'] || '', grade: r['Grade'] || '', referralSource: source || r['Referring Doctor'] || r['Office Name'] || '', nonDoctorNotes: r['Patient/Parent Concerns or Symptoms'] || '', _referralRow: rowNumber }, { referralRow: rowNumber }); };
+        $('#startInitialBtn', root).onclick = () => {
+          closeDrawer(true);
+          const isAmb = String(r['Amblyopia/Strabismus'] || '').trim().toLowerCase() === 'yes';
+          window.renderInitialForm({
+            patientName: r['Patient Name'] || '',
+            age: r['Age'] || '',
+            dob: r['DOB'] || '',
+            parentName: r['Parent Name'] || '',
+            phone: r['Phone'] || '',
+            email: r['Email'] || '',
+            grade: r['Grade'] || '',
+            referralSource: source || r['Referring Doctor'] || r['Office Name'] || '',
+            doctorAmblyopia: isAmb,
+            doctorStrabismus: isAmb,
+            amblyopiaStrabismus: isAmb ? 'Yes' : 'No',
+            nonDoctorNotes: r['Patient/Parent Concerns or Symptoms'] || '',
+            _referralRow: rowNumber
+          }, { referralRow: rowNumber });
+        };
         $('#editBtn', root).onclick = () => { closeDrawer(true); window.renderReferralForm(rowNumber); };
         const sch = $('#scheduleBtn', root);
         if (sch) sch.onclick = async () => { if (!await UX.confirm({ title: 'Mark as scheduled?', message: `${r['Patient Name']} will move to “Scheduled or not booking”.`, confirmLabel: 'Mark as scheduled' })) return; try { await api().setBookingStatus(rowNumber, 'Scheduled'); showToast('Marked as scheduled.'); reopen('info'); } catch (e) { showToast(errorMessage(e), 'error'); } };
@@ -296,7 +315,7 @@
       defaultSort: () => ({ key: 'scheduled', dir: 'desc' }),
       columns: [
         { key: 'scheduled', label: 'Scheduled On', sort: (r) => `${r.scheduledOn ? String(r.scheduledOn).slice(0, 10) : ''}|${String(r._row).padStart(6, '0')}`, html: (r) => `<span class="num" title="Date the family confirmed scheduling">${r.scheduledOn ? fmtDate(r.scheduledOn) : '<span class="muted">Not recorded</span>'}</span><div class="sub">Called ${fmtDate(r.initialContactDate)}</div>` },
-        { key: 'patient', label: 'Patient', sort: (r) => String(r.patientName || '').toLowerCase(), html: (r) => `<div class="cell-main">${esc(r.patientName)}</div><div class="sub">${r.dob ? `Born ${fmtDate(r.dob)}` : ''}</div>` },
+        { key: 'patient', label: 'Patient', sort: (r) => String(r.patientName || '').toLowerCase(), html: (r) => `<div class="cell-main">${esc(r.patientName)}${isAmbPill(r.amblyopiaStrabismus)}</div><div class="sub">${r.dob ? `Born ${fmtDate(r.dob)}` : ''}</div>` },
         { key: 'exam', label: 'Exam', sort: (r) => (r.examDate ? String(r.examDate).slice(0, 10) : ''), html: (r) => `<div>${dash(r.examType)}</div><div class="sub num">${r.examDate ? fmtDate(r.examDate) : ''}${r.examTime ? ` · ${esc(time12Value(r.examTime))}` : ''}</div>` },
         { key: 'parent', label: 'Parent', p: 2, sort: (r) => String(r.parentName || '').toLowerCase(), html: (r) => `<div>${dash(r.parentName)}</div><div class="sub">${esc(r.phone || r.email || '')}</div>` },
         { key: 'source', label: 'Referral source', p: 3, html: (r) => `<div class="clip" title="${esc(r.referralSource || '')}">${dash(r.referralSource)}</div>` },
@@ -319,8 +338,8 @@
     let r, extra = null;
     try { [r, extra] = await Promise.all([api().getSetup(rowNumber), api().getSetupFormData(rowNumber)]); } catch (e) { showToast(errorMessage(e), 'error'); return; }
     if (!r) { showToast('Patient not found.', 'error'); return; }
-    const values = { scheduledOn: fmtDate(r.scheduledOn),initialContactDate: fmtDate(r.initialContactDate),patientName: r.patientName, dob: fmtDate(r.dob), age: r.age, parentName: r.parentName, phone: r.phone, email: r.email, grade: r.grade, referralSource: r.referralSource, examType: r.examType, examDate: fmtDate(r.examDate), examTime: time12Value(r.examTime), parentMeetingDate: fmtDate(r.parentMeetingDate), parentMeetingTime: time12Value(r.parentMeetingTime) };
-    const labels = [['scheduledOn', 'Scheduled On'], ['initialContactDate', 'Called'], ['patientName', 'Patient name'], ['dob', 'Date of birth'], ['age', 'Age'], ['parentName', 'Parent name'], ['phone', 'Phone'], ['email', 'Email'], ['grade', 'Grade'], ['referralSource', 'Referral source'], ['examType', 'Exam type'], ['examDate', 'Exam date'], ['examTime', 'Exam time'], ['parentMeetingDate', 'Parent meeting date'], ['parentMeetingTime', 'Parent meeting time']];
+    const values = { scheduledOn: fmtDate(r.scheduledOn), amblyopiaStrabismus: r.amblyopiaStrabismus || 'No', initialContactDate: fmtDate(r.initialContactDate), patientName: r.patientName, dob: fmtDate(r.dob), age: r.age, parentName: r.parentName, phone: r.phone, email: r.email, grade: r.grade, referralSource: r.referralSource, examType: r.examType, examDate: fmtDate(r.examDate), examTime: time12Value(r.examTime), parentMeetingDate: fmtDate(r.parentMeetingDate), parentMeetingTime: time12Value(r.parentMeetingTime) };
+    const labels = [['scheduledOn', 'Scheduled On'], ['amblyopiaStrabismus', 'Amblyopia / Strabismus'], ['initialContactDate', 'Called'], ['patientName', 'Patient name'], ['dob', 'Date of birth'], ['age', 'Age'], ['parentName', 'Parent name'], ['phone', 'Phone'], ['email', 'Email'], ['grade', 'Grade'], ['referralSource', 'Referral source'], ['examType', 'Exam type'], ['examDate', 'Exam date'], ['examTime', 'Exam time'], ['parentMeetingDate', 'Parent meeting date'], ['parentMeetingTime', 'Parent meeting time']];
     const copyRows = labels.map(([k, l]) => { const v = values[k] === '—' ? '' : values[k]; return `<div class="copy-row"><span class="k">${esc(l)}</span><span class="v ${v ? '' : 'is-empty'}">${v ? esc(v) : '—'}</span>${v ? `<button type="button" class="btn btn-sm" data-copy="${k}" aria-label="Copy ${esc(l)}">${ico('copy', 'sm')}Copy</button>` : '<span></span>'}</div>`; }).join('');
     const exam = setupAppointmentPhrase(r.examDate, r.examTime), parent = setupAppointmentPhrase(r.parentMeetingDate, r.parentMeetingTime);
     const yes = (v) => String(v).toLowerCase() === 'yes';
@@ -403,7 +422,7 @@
     let result;
     try { result = await api().listIncomplete(); } catch (e) { fatal(e, renderScheduleIncompleteLanding); return; }
     const recs = result.records || [];
-    const cPatient = { key: 'patient', label: 'Patient', sort: (r) => String(r.patientName || '').toLowerCase(), html: (r) => `<div class="cell-main">${esc(r.patientName)}</div><div class="sub">${esc(r.parentName || '')}</div>` };
+    const cPatient = { key: 'patient', label: 'Patient', sort: (r) => String(r.patientName || '').toLowerCase(), html: (r) => `<div class="cell-main">${esc(r.patientName)}${isAmbPill(r.amblyopiaStrabismus)}</div><div class="sub">${esc(r.parentName || '')}</div>` };
     const cPhone = { key: 'phone', label: 'Phone', p: 2, html: (r) => `<div class="num">${dash(r.phone)}</div><div class="sub clip" title="${esc(r.email || '')}">${esc(r.email || '')}</div>` };
     const cDate = { key: 'date', label: 'Call date', sort: (r) => (r.date ? String(r.date).slice(0, 10) : ''), html: (r) => `<span class="num">${fmtDate(r.date)}</span>` };
     const cSource = { key: 'source', label: 'Referral source', p: 3, html: (r) => `<div class="clip" title="${esc(r.referralSource || '')}">${dash(r.referralSource)}</div>` };
@@ -441,7 +460,7 @@
       notice, noticeKind: willNot ? 'closed' : '',
       title: r.patientName || 'Patient', accent: '#f08a24', subtitle: esc(r.parentName ? `Parent: ${r.parentName}` : 'Schedule incomplete'), chip: chip(r.status || 'Incomplete', incKind(r.status)),
       actions: `<button type="button" class="btn btn-primary" id="continueIncomplete">Continue Initial Contact</button><button type="button" class="btn" id="editIncomplete">Edit Patient</button>${!closed?`<button type="button" class="btn" id="markIncompleteFollow">${isNoAnswer?'Return to Follow-up':'Mark No Answer'}</button>`:''}<button type="button" class="btn" id="markIncompleteScheduled">Mark as scheduled</button><button type="button" class="btn" id="markIncompleteNo">Will not schedule</button>`,
-      html: `<div class="dsection"><h3>Patient</h3>${facts([['Date of birth', fmtDate(r.dob)], ['Age', T(r.age)], ['Parent', T(r.parentName)], ['Phone', T(r.phone)], ['Email', T(r.email)], ['Grade', T(r.grade)], ['Referral source', T(r.referralSource), true]])}</div>
+      html: `<div class="dsection"><h3>Patient</h3>${facts([['Date of birth', fmtDate(r.dob)], ['Age', T(r.age)], ['Amblyopia / Strabismus', T(r.amblyopiaStrabismus || 'No')], ['Parent', T(r.parentName)], ['Phone', T(r.phone)], ['Email', T(r.email)], ['Grade', T(r.grade)], ['Referral source', T(r.referralSource), true]])}</div>
         <div class="dsection"><h3>${willNot ? 'Reason for not scheduling' : 'Why it did not finish'}</h3><label class="sr-only" for="incompleteComments">Reason</label><textarea id="incompleteComments" rows="4" placeholder="What did the family say? When should we try again?">${esc(r.comments || '')}</textarea></div>
         <div class="dsection">${window.incompleteFollowupScript(r)}<h3>Follow-up notes</h3><label class="sr-only" for="incompleteFollow">Follow-up notes</label><textarea id="incompleteFollow" rows="4" ${r.followUpAvailable ? '' : 'disabled'} placeholder="${r.followUpAvailable ? 'Calls and texts after the first contact: what happened, what is next.' : 'The Follow-Up Notes column could not be created. Close the Excel file if it is open, then reopen this screen.'}">${esc(r.followUpNotes || '')}</textarea></div>
         <div class="form-row-end" style="margin-top:0"><button type="button" class="btn btn-primary" id="saveIncompleteNotes">Save notes</button></div>`,
@@ -452,7 +471,18 @@
         const done = async (patch, msg) => { try { await api().updateIncomplete(rowNumber, patch); showToast(msg); closeDrawer(true); renderScheduleIncompleteLanding(); } catch (e) { showToast(errorMessage(e), 'error'); } };
         $('#editIncomplete', root).onclick = () => { closeDrawer(true); window.editIncompletePatient(rowNumber,r); };
         const moveBtn=$('#markIncompleteFollow',root);if(moveBtn)moveBtn.onclick=()=>done({status:isNoAnswer?'Follow-up':'No Answer',comments:comments(),...(r.followUpAvailable?{followUpNotes:follow()}:{})},isNoAnswer?'Returned to Follow-up.':'Moved to No Answer.');
-        $('#continueIncomplete', root).onclick = () => { closeDrawer(true); window.renderInitialForm(r.formData || { patientName: r.patientName, age: r.age, dob: r.dob, parentName: r.parentName, phone: r.phone, email: r.email, grade: r.grade, referralSource: r.referralSource }, { incompleteRow: rowNumber }); };
+        $('#continueIncomplete', root).onclick = () => {
+          closeDrawer(true);
+          const fData = r.formData ? { ...r.formData } : { patientName: r.patientName, age: r.age, dob: r.dob, parentName: r.parentName, phone: r.phone, email: r.email, grade: r.grade, referralSource: r.referralSource };
+          if (String(r.amblyopiaStrabismus || '').toLowerCase() === 'yes') {
+            if (fData.doctorAmblyopia === undefined && fData.doctorStrabismus === undefined) {
+              fData.doctorAmblyopia = true;
+              fData.doctorStrabismus = true;
+            }
+            fData.amblyopiaStrabismus = 'Yes';
+          }
+          window.renderInitialForm(fData, { incompleteRow: rowNumber });
+        };
         $('#markIncompleteScheduled', root).onclick = () => done({ status: 'Scheduled', comments: comments(), ...(r.followUpAvailable?{followUpNotes:follow()}:{}) }, 'Marked as scheduled.');
         $('#markIncompleteNo', root).onclick = async () => {
           const reason = await UX.askReason({ title: 'Why will this patient not schedule?', message: 'The case will be closed and not followed up any more. The reason stays visible in the list and on the patient.', label: 'Reason', placeholder: 'For example: decided to wait, moved away, going to another provider.', value: comments(), confirmLabel: 'Close the case' });
