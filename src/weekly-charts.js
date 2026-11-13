@@ -370,7 +370,9 @@
    if(showMonthly)wire('monthly');
   }
  }
- async function load(refresh=false){const id=++requestId;loading=true;loadError='';if(refresh){rows=[];monthlyRows=[];setupRecords=[];}
+ async function load(refresh=false){const id=++requestId;loadError='';if(refresh){rows=[];monthlyRows=[];setupRecords=[];}
+  const hasWarmData=!refresh&&(rows.length>0||monthlyRows.length>0||setupRecords.length>0);
+  loading=!hasWarmData;
   hasExtraLoaders=typeof api()?.listMonthlyReports==='function'||typeof api()?.listSetup==='function';
   render();
   try{
@@ -410,6 +412,15 @@
  }
  window.renderWeeklyDashboard=()=>load();
  window.stopWeeklyDashboard=()=>{requestId++;loading=false;};
+ if(typeof document!=='undefined'&&typeof el==='function'&&el('navReports')){
+  const timer=setTimeout(()=>{
+   try{
+    api()?.getWeeklyChartHistory?.().catch(()=>{});
+    api()?.listMonthlyReports?.().catch(()=>{});
+   }catch(_){}
+  },1200);
+  if(timer&&typeof timer.unref==='function')timer.unref();
+ }
  window.weeklyChartHelpers={
   safeValue,
   totalForMetric,

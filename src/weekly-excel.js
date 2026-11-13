@@ -56,7 +56,33 @@ function locateLegacyScript(){
 }
 async function stageLegacyScript(workdir){const {bytes}=locateLegacyScript();const target=path.join(workdir,'legacy-excel.ps1');await fsp.writeFile(target,bytes,{flag:'wx'});await fsp.access(target,fs.constants.R_OK);return target;}
 let legacyQueue=Promise.resolve();
-function runLegacy(job){const pending=legacyQueue.then(()=>runLegacyJob(job));legacyQueue=pending.catch(()=>{});return pending;}
+function enqueueLegacy(fn){const pending=legacyQueue.then(fn);legacyQueue=pending.catch(()=>{});return pending;}
+function runLegacy(job){return enqueueLegacy(()=>runLegacyJob(job));}
+let diskCacheDir=null;
+function setCacheDir(dir){diskCacheDir=dir||null;}
+function diskCachePath(){return diskCacheDir?path.join(diskCacheDir,'excel-snapshot-cache.json'):null;}
+function readDiskCache(key){
+ const p=diskCachePath();if(!p)return null;
+ try{const data=JSON.parse(fs.readFileSync(p,'utf8'));return data&&data.entries&&data.entries[key]||null;}catch(_){return null;}
+}
+function writeDiskCache(key,value){
+ const p=diskCachePath();if(!p)return;
+ try{
+  fs.mkdirSync(path.dirname(p),{recursive:true});
+  let data={entries:{}};
+  try{const parsed=JSON.parse(fs.readFileSync(p,'utf8'));if(parsed&&typeof parsed.entries==='object')data=parsed;}catch(_){}
+  const keys=Object.keys(data.entries);
+  if(keys.length>=8){for(const oldKey of keys.slice(0,keys.length-7))delete data.entries[oldKey];}
+  data.entries[key]=value;
+  const tmp=p+'.tmp-'+process.pid+'-'+Date.now();
+  fs.writeFileSync(tmp,JSON.stringify(data),'utf8');
+  fs.renameSync(tmp,p);
+ }catch(_){}
+}
+function clearDiskCache(){
+ const p=diskCachePath();if(!p)return;
+ try{fs.unlinkSync(p);}catch(_){}
+}
 async function runLegacyJob(job){
  if(process.platform!=='win32')throw new Error('Legacy .xls files require Microsoft Excel on Windows.');
  const workdir=await fsp.mkdtemp(path.join(os.tmpdir(),'clinic-weekly-'));
@@ -82,6 +108,22 @@ async function runLegacyJob(job){
  }finally{await fsp.rm(workdir,{recursive:true,force:true});}
 }
 const legacyCache=new Map();
+const legacyHistoryCache=new Map();
+async function legacyHistoryRead(file){
+ const cacheKey=['weekly-history',file,sha256(file)].join('|');
+ if(legacyHistoryCache.has(cacheKey))return legacyHistoryCache.get(cacheKey);
+ if(legacyHistoryCache.size>12)legacyHistoryCache.clear();
+ const operation=(async()=>{
+  const diskHit=readDiskCache(cacheKey);
+  if(diskHit)return diskHit;
+  const raw=await runLegacy({action:'history',workbook:file,weekEnding:'1900-01-01',includeNotes:true});
+  writeDiskCache(cacheKey,raw);
+  return raw;
+ })();
+ legacyHistoryCache.set(cacheKey,operation);
+ operation.catch(()=>{if(legacyHistoryCache.get(cacheKey)===operation)legacyHistoryCache.delete(cacheKey);});
+ return operation;
+}
 async function legacyRead(file,weekEnding){
  const cacheKey=[file,weekEnding,sha256(file)].join('|');
  if(legacyCache.has(cacheKey))return legacyCache.get(cacheKey);
@@ -91,7 +133,7 @@ async function legacyRead(file,weekEnding){
  return operation;
 }
 async function readLegacyUncached(file,weekEnding){
- const raw=await runLegacy({action:'inspect',workbook:file,weekEnding});
+ const raw=weekEnding==='1900-01-01'?await legacyHistoryRead(file):await runLegacy({action:'inspect',workbook:file,weekEnding});
  const parsed=layout.resolve(raw.headers);
  const weeks=uniqueWeeks(raw.weeks||[]);
  const rawHeaders={};(raw.headers||[]).forEach((head,i)=>{rawHeaders[layout.toLetter(i+1)]=String(head??'');});
@@ -123,7 +165,7 @@ async function chartHistory(file,{includeNotes=false}={}){
  requireFile(file);
  let rows;
  if(ext(file)==='.xls'){
-  const raw=await runLegacy({action:'history',workbook:file,weekEnding:'1900-01-01',includeNotes});
+  const raw=await legacyHistoryRead(file);
   const {map}=layout.resolve(raw.headers);
   rows=(raw.historyRows||[]).map(w=>projectHistoryRow(w.date,w.values||{},map,includeNotes?w.notes:'',w.row));
  }else{
@@ -190,7 +232,7 @@ async function write(file,weekEnding,updates){
   if(!current.exists&&current.latestDate&&weekEnding<current.latestDate)throw new Error('This older week is not in Excel. Create its row in Excel first.');
   const {physical,allowed}=makePhysicalUpdates(updates,current.map,current.rawHeaders);
   const result=await runLegacy({action:'write',workbook:file,weekEnding,updates:physical,allowed});
-  legacyCache.clear();
+  legacyCache.clear();legacyHistoryCache.clear();clearDiskCache();
   return {row:result.row,exists:result.exists,rowAction:result.rowAction};
  }
  const {book,sheet,map,latestDate,row,exists}=await xlsxRead(file,weekEnding);
@@ -207,7 +249,7 @@ async function write(file,weekEnding,updates){
    const current=await legacyRead(file,weekEnding);
    const {physical,allowed}=makePhysicalUpdates(updates,current.map,current.rawHeaders);
    const result=await runLegacy({action:'write',workbook:file,weekEnding,updates:physical,allowed});
-   legacyCache.clear();
+   legacyCache.clear();legacyHistoryCache.clear();clearDiskCache();
    return {row:result.row,exists:result.exists,rowAction:result.rowAction};
   }
   const prev=sheet.getRow(row-1);
@@ -224,4 +266,4 @@ async function write(file,weekEnding,updates){
  try{await book.xlsx.writeFile(tmp);await fsp.rename(tmp,file)}catch(e){try{await fsp.unlink(tmp)}catch{};throw new Error('Close the workbook in Excel and retry. '+e.message)}
  return {row,exists,rowAction};
 }
-module.exports={chartHistory,numberOrNull,projectHistoryRow,inspect,write,sha256,requireFile,asDate,parseLegacyResponse,locateLegacyScript,stageLegacyScript,layout,makePhysicalUpdates,formulaPattern,classifyPreparedRow};
+module.exports={chartHistory,numberOrNull,projectHistoryRow,inspect,write,sha256,requireFile,asDate,parseLegacyResponse,locateLegacyScript,stageLegacyScript,layout,makePhysicalUpdates,formulaPattern,classifyPreparedRow,enqueueLegacy,setCacheDir,readDiskCache,writeDiskCache,clearDiskCache};

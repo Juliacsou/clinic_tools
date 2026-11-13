@@ -72,11 +72,11 @@
   });
  }
  async function save(showToast=false){if(!draft||currentSaving)return;currentSaving=true;try{await api().saveWeeklyDraft(draft);pending=true;if(showToast)UX.showToast('Draft saved.');const el=$('#wrSaved');if(el)el.textContent='Draft';}catch(e){toast(e);}finally{currentSaving=false;}}
- async function home(){active++;view='home';week=null;draft=null;preview=null;editing=false;setPage();maskLoading();
-  try{const [meta,list]=await Promise.all([api().getWeeklyInfo(),api().listWeeklyReports()]);info=meta;listing=list.weeks||[];listError=list.workbookError||null;
+ async function home(){const id=++active;view='home';week=null;draft=null;preview=null;editing=false;setPage();if(listing.length&&info)renderHome();else maskLoading();
+  try{const [meta,list]=await Promise.all([api().getWeeklyInfo(),api().listWeeklyReports()]);if(id!==active||view!=='home')return;info=meta;listing=list.weeks||[];listError=list.workbookError||null;
    const available=[...new Set(listing.map(x=>x.weekEnding.slice(0,4)))].sort().reverse();if(!year||!available.includes(year))year=available.includes(String(new Date().getFullYear()))?String(new Date().getFullYear()):(available[0]||String(new Date().getFullYear()));
    renderHome();
-  }catch(e){host().innerHTML=`<div class="card"><p>Could not load weeks: ${esc(e.message)}</p><button class="btn btn-primary" id="wrRetry">Retry</button></div>`;$('#wrRetry').onclick=home;}
+  }catch(e){if(id!==active)return;host().innerHTML=`<div class="card"><p>Could not load weeks: ${esc(e.message)}</p><button class="btn btn-primary" id="wrRetry">Retry</button></div>`;$('#wrRetry').onclick=home;}
  }
  function isDraftRow(w){return !w.inExcel || !!(w.hasDraft && (!w.exportedAt || (w.savedAt && w.savedAt>w.exportedAt)));}
  function renderHome(){

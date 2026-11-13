@@ -15,12 +15,19 @@ try {
  if($null -eq $sheet){throw 'The workbook has no Monthly worksheet.'}
  $heads=@('Month Year','# of inquiries','# free Screenings','OM Exams Done','Percept Test Done','# VT Consults Done','# New VT Starts','Total # VT Pts Enrolled','# VT Sessions','# VT Grads','# Cancellations 99215/Annuals','# Cancellations 99213/Follow ups','Comments')
  function Normalize-Header([string]$value){return ([regex]::Replace($value.ToLowerInvariant(),'[^a-z0-9]+',' ')).Trim()}
- for($c=1;$c -le 13;$c++){if((Normalize-Header ([string]$sheet.Cells.Item(1,$c).Value2)) -ne (Normalize-Header $heads[$c-1])){throw ('Unexpected Monthly heading in column '+$c)}}
  $last=[int]$sheet.Cells.Item($sheet.Rows.Count,1).End(-4162).Row
  if($last -gt 20000){throw 'Monthly sheet exceeds supported 20,000 dated rows.'}
+ $maxReadRow=[Math]::Max(1,$last)
+ $sheetMatrix=$sheet.Range($sheet.Cells.Item(1,1),$sheet.Cells.Item($maxReadRow,13)).Value2
+ $matrixRowBase=1;$matrixColBase=1
+ if($sheetMatrix -is [Array]){$matrixRowBase=$sheetMatrix.GetLowerBound(0);$matrixColBase=$sheetMatrix.GetLowerBound(1)}
+ for($c=1;$c -le 13;$c++){
+  $hdrVal=$(if($sheetMatrix -is [Array]){[string]$sheetMatrix.GetValue($matrixRowBase,$matrixColBase+$c-1)}else{[string]$sheet.Cells.Item(1,$c).Value2})
+  if((Normalize-Header $hdrVal) -ne (Normalize-Header $heads[$c-1])){throw ('Unexpected Monthly heading in column '+$c)}
+ }
  $rows=@();$found=0;$latest='';$seen=@{};$duplicateMonths=@{}
  for($r=2;$r -le $last;$r++){
-  $raw=$sheet.Cells.Item($r,1).Value2
+  $raw=$(if($sheetMatrix -is [Array]){$sheetMatrix.GetValue($matrixRowBase+$r-1,$matrixColBase)}else{$sheet.Cells.Item($r,1).Value2})
   if($null -eq $raw -or [string]$raw -eq ''){continue}
   try{if($raw -is [double] -or $raw -is [int] -or $raw -is [decimal]){$dt=[DateTime]::FromOADate([double]$raw)}else{$dt=[DateTime]::Parse([string]$raw,[Globalization.CultureInfo]::InvariantCulture)}}catch{continue}
   if($dt.Year -lt 2000 -or $dt.Year -gt 2100){continue}
@@ -31,7 +38,11 @@ try {
   } else {$seen[$month]=[int]$r}
   $latest=[string]$(if($month -gt $latest){$month}else{$latest})
   $values=@{}
-  for($c=2;$c -le 13;$c++){ $letter=[string][char](64+$c);$item=$sheet.Cells.Item($r,$c).Value2;if($null -ne $item){$values[$letter]=$item} }
+  for($c=2;$c -le 13;$c++){
+   $letter=[string][char](64+$c)
+   $item=$(if($sheetMatrix -is [Array]){$sheetMatrix.GetValue($matrixRowBase+$r-1,$matrixColBase+$c-1)}else{$sheet.Cells.Item($r,$c).Value2})
+   if($null -ne $item){$values[$letter]=$item}
+  }
   $rows+=@{month=$month;row=$r;values=$values}
   if($month -eq [string]$job.month -and $found -eq 0){$found=$r}
  }

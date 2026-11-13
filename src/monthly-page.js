@@ -24,10 +24,10 @@ function fromImport(col){if(!automatic.includes(col))return null;const group=gro
 }
 function value(col){if(Object.hasOwn(draft?.overrides||{},col))return draft.overrides[col];if(Object.hasOwn(draft?.manual||{},col))return draft.manual[col];const computed=fromImport(col);if(computed!==null)return computed;return existing?.[col]??null;}
 function changed(){return pending||!inExcel;}
-async function allMonths(){const id=++token;selected='';draft=null;preview=null;page();loading();
+async function allMonths(){const id=++token;selected='';draft=null;preview=null;page();if(data.length&&info)renderList();else loading();
  try{const [meta,results]=await Promise.all([api().getMonthlyInfo(),api().listMonthlyReports()]);if(id!==token)return;
  info=meta;data=results.months||[];listError=results.error||null;renderList();}
- catch(e){host().innerHTML=`<section class="card"><p>${esc(e.message)}</p><button id="mrRetry" class="btn btn-primary">Retry</button></section>`;$('#mrRetry').onclick=allMonths;}
+ catch(e){if(id!==token)return;host().innerHTML=`<section class="card"><p>${esc(e.message)}</p><button id="mrRetry" class="btn btn-primary">Retry</button></section>`;$('#mrRetry').onclick=allMonths;}
 }
 function renderList(){page();const years=[...new Set(data.map(x=>x.month.slice(0,4)))].sort().reverse();const visible=data.filter(x=>filterYear==='all'||x.month.slice(0,4)===filterYear);const duplicateGroups=[...new Map(data.filter(x=>x.duplicate).map(x=>[x.month,x.duplicateRows])).entries()];
  host().innerHTML=`<div class="wr-page mr-page"><header class="wr-dashboard-head"><div><span class="wr-eyebrow">REPORTS</span><h1>Monthly Reports</h1></div><div class="wr-actions"><button type="button" id="mrToDashboard" class="btn wr-dashboard-return">&#8592; Back to dashboard</button><button id="mrToWeeks" class="btn">Weekly Reports</button><button id="mrNew" class="btn btn-primary">+ New Month</button></div></header>

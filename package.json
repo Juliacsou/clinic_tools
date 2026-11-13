@@ -1,6 +1,6 @@
 {
   "name": "visual-health-clinic-tools",
-  "version": "2.27.0",
+  "version": "2.27.1",
   "description": "Local clinic workflow tools for Visual Health and Learning Center",
   "main": "src/main.js",
   "author": "Visual Health and Learning Center",

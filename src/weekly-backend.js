@@ -64,7 +64,7 @@ function makeUpdates(d){
  return updates;
 }
 module.exports=function registerWeekly({ipcMain,dialog,mainWindow,dataDir,queueWrite}){
- const folder=()=>path.join(dataDir(),'weekly-reports');
+ const folder=()=>{const dir=path.join(dataDir(),'weekly-reports');excel.setCacheDir?.(dir);return dir;};
  const settingFile=()=>path.join(folder(),'settings.json');
  const draftFile=()=>path.join(folder(),'drafts.json');
  function readJson(p,otherwise){try{return JSON.parse(fs.readFileSync(p,'utf8'))}catch(e){if(e.code==='ENOENT')return otherwise;throw e}}

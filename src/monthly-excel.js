@@ -57,7 +57,11 @@ async function xlsxRead(file){
  });
  return {book,sheet,rows,last,latest,duplicateMonths:duplicatedMonths(rows)};
 }
-async function legacyJob(file,action,month,updates){
+const monthlyLegacyCache=new Map();
+function legacyJob(file,action,month,updates){
+ return weeklyExcel.enqueueLegacy(()=>runMonthlyLegacyJob(file,action,month,updates));
+}
+async function runMonthlyLegacyJob(file,action,month,updates){
  if(process.platform!=='win32')throw new Error('Legacy .xls Monthly Reports require Microsoft Excel on Windows.');
  const dir=await fsp.mkdtemp(path.join(os.tmpdir(),'clinic-monthly-'));
  const input=path.join(dir,'input.json'),output=path.join(dir,'output.json'),script=path.join(dir,'monthly-legacy-excel.ps1');
@@ -71,9 +75,27 @@ async function legacyJob(file,action,month,updates){
   });
  }finally{await fsp.rm(dir,{recursive:true,force:true});}
 }
+async function legacyInspectCached(file,month){
+ const mKey=month||'';
+ const cacheKey=['monthly-inspect',file,mKey,weeklyExcel.sha256(file)].join('|');
+ if(monthlyLegacyCache.has(cacheKey))return monthlyLegacyCache.get(cacheKey);
+ if(monthlyLegacyCache.size>12)monthlyLegacyCache.clear();
+ const operation=(async()=>{
+  if(!mKey){
+   const diskHit=weeklyExcel.readDiskCache(cacheKey);
+   if(diskHit)return diskHit;
+  }
+  const result=await legacyJob(file,'inspect',mKey,null);
+  if(!mKey)weeklyExcel.writeDiskCache(cacheKey,result);
+  return result;
+ })();
+ monthlyLegacyCache.set(cacheKey,operation);
+ operation.catch(()=>{if(monthlyLegacyCache.get(cacheKey)===operation)monthlyLegacyCache.delete(cacheKey);});
+ return operation;
+}
 async function inspect(file,month){requireFile(file);if(month)assertMonth(month);
  if(path.extname(file).toLowerCase()==='.xls'){
-  const result=await legacyJob(file,'inspect',month||'',null);
+  const result=await legacyInspectCached(file,month);
   const conflicting=result.duplicateMonths?.[month];
   if(month&&Array.isArray(conflicting)&&conflicting.length>1)throw new Error(ambiguousMonth(month,conflicting));
   return result;
@@ -90,7 +112,11 @@ async function write(file,month,updates){requireFile(file);assertMonth(month);
   if(col==='M'){if(typeof value!=='string'||value.length>10000)throw new Error('Invalid Monthly comments.');}
   else if(!Number.isSafeInteger(value)||value<0)throw new Error('Invalid Monthly value for '+col+'.');
  }
- if(path.extname(file).toLowerCase()==='.xls')return legacyJob(file,'write',month,updates);
+ if(path.extname(file).toLowerCase()==='.xls'){
+  const res=await legacyJob(file,'write',month,updates);
+  monthlyLegacyCache.clear();weeklyExcel.clearDiskCache();
+  return res;
+ }
  const d=await xlsxRead(file);if(d.duplicateMonths[month])throw new Error(ambiguousMonth(month,d.duplicateMonths[month]));let record=d.rows.find(r=>r.month===month),row=record?.row||nextMonthlyRow(d.last,d.latest,month);
  if(!record&&d.latest&&month<d.latest)throw new Error('This older month is missing from the Excel workbook. Add its month row first. Nothing was modified.');
  if(!record){
