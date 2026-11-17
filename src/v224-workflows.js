@@ -5,6 +5,7 @@ function cancellationState(rec){
   const reason=norm(rec.closureReason),status=norm(rec.followUpStatus),res=norm(rec.rescheduled);
   if(res==='yes'||reason==='rescheduled'||status==='rescheduled')return 'Rescheduled';
   if(['will not reschedule','closed / not interested','not interested','closed'].includes(status)||reason==='will not reschedule')return 'Will Not Reschedule';
+  if(status==='follow-up'||status==='needs follow-up'||status==='reopened'||reason==='reopened'||reason==='follow-up')return 'Follow-up';
   if(reason==='no answer after 3 attempts'||status==='no answer after 3 attempts'||['attempt1At','attempt2At','attempt3At'].every(k=>!!rec[k]))return 'No Answer After 3 Attempts';
   return 'Follow-up';
 }

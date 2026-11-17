@@ -107,6 +107,12 @@
   const cancelKind = (s) => (s === 'Rescheduled' ? 'ok' : ['Will Not Reschedule','No Answer After 3 Attempts'].includes(s) ? 'mute' : 'info');
   const CANCEL_DONE = ['Rescheduled', 'Will Not Reschedule', 'No Answer After 3 Attempts'];
   const isSecond = (r) => String(r.secondOccurrence || '').toUpperCase() === 'YES';
+  const formatUsDateTimeInput = (v) => {
+    if (!v) return '';
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return String(v).replace(',', '');
+    return d.toLocaleString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }).replace(',', '');
+  };
 
   async function renderCancellationLanding() {
     setHeader('Exam Cancelations', '+ New Cancelation', () => openCancellationNew());
@@ -265,19 +271,79 @@
 
     const needsFollow = !CANCEL_DONE.includes(r._state);
     const attempt = needsFollow ? ([1,2,3].find(n => !r['attempt'+n+'At']) || null) : null;
-    const history = `<ol class="steps">${[1,2,3].map((i)=>{const date=r['attempt'+i+'At'];const comment=r['attempt'+i+'Comment'];return `<li class="step ${date?'is-done':''}"><span class="step-n">${i}</span><div><div class="step-title">${i===1?'1st':i===2?'2nd':'3rd'} contact ${date?`<span class="muted num"> · ${fmtDateTime(date)}</span>`:''}</div><p class="step-note ${comment?'':'muted'}">${esc(comment|| (date?'No comment':'Not attempted yet'))}</p></div></li>`;}).join('')}</ol>`;
-    const contactHtml = `<div class="dsection"><h3>Contact history</h3>${history}</div>${attempt?`<div class="panel-block"><h3>Log attempt ${attempt} of 3</h3><form id="cancelContactForm">${window.cancellationAttemptScript(attempt,r)}<label>Date and time<div class="datetime-with-action"><input id="cancelContactDateTime" type="text" autocomplete="off" name="contact_datetime" placeholder="MM/DD/YYYY hh:mm AM/PM" value="${esc(nowUsDateTime())}" required><button type="button" class="btn btn-sm" id="useNowCancelContact">Now</button></div></label><label>Comment<textarea name="comment" rows="3" placeholder="Call result or voicemail left..."></textarea></label><div class="form-row-end"><button class="btn btn-primary" type="submit">Save contact${attempt===3?' & close case':''}</button></div></form></div>`:'<p class="muted">No further attempts are required for this patient.</p>'}`;
-    const closureHtml=needsFollow?`<form id="cancelCloseForm"><h3>Close follow-up</h3><label>Outcome<select name="followUpStatus" id="cancelClosureReason" required><option value="">Select outcome…</option><option value="Rescheduled">Rescheduled</option><option value="Will Not Reschedule">Will Not Reschedule</option></select></label><label>New appointment date${dateTextInput('newAppointmentDate',r.newAppointmentDate||'')}</label><label>Notes<textarea name="followUpNotes" rows="4">${esc(r.followUpNotes||'')}</textarea></label><div class="form-row-end"><button type="submit" class="btn btn-primary">Save & close case</button></div></form>`:`<div class="dsection">${facts([['Closure reason',T(r.closureReason||r._state)],['Closed at',fmtDateTime(r.closedAt)],['New appointment',fmtDate(r.newAppointmentDate)],['Notes',T(r.followUpNotes),true]])}</div>`;
+    const historyView = `<div id="contactHistoryView"><ol class="steps">${[1,2,3].map((i)=>{const date=r['attempt'+i+'At'];const comment=r['attempt'+i+'Comment'];return `<li class="step ${date?'is-done':''}"><span class="step-n">${i}</span><div><div class="step-title">${i===1?'1st':i===2?'2nd':'3rd'} contact ${date?`<span class="muted num"> · ${fmtDateTime(date)}</span>`:''}</div><p class="step-note ${comment?'':'muted'}">${esc(comment|| (date?'No comment':'Not attempted yet'))}</p></div></li>`;}).join('')}</ol></div>`;
+
+    const historyEditPanel = `<div id="contactHistoryEditPanel" style="display:none" class="panel-block">
+      <h3>Edit contact history</h3>
+      <p class="muted small" style="margin:0 0 14px">Edit dates or notes for each contact attempt, or click Clear to remove an attempt.</p>
+      <form id="editContactHistoryForm">
+        ${[1, 2, 3].map(i => {
+          const dt = r['attempt' + i + 'At'];
+          const dtVal = dt ? formatUsDateTimeInput(dt) : '';
+          const cmVal = r['attempt' + i + 'Comment'] || '';
+          return `<div style="border:1px solid var(--line,#e5eaf1);border-radius:10px;padding:12px;margin-bottom:12px;background:#fafbfc">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <strong>${i === 1 ? '1st' : i === 2 ? '2nd' : '3rd'} Contact</strong>
+              <div class="inline-actions" style="margin:0">
+                <button type="button" class="btn btn-sm btn-clear-attempt" data-target="editAttemptDate${i}" data-comment="editAttemptComment${i}">Clear</button>
+              </div>
+            </div>
+            <label>Date and time
+              <div class="datetime-with-action">
+                <input id="editAttemptDate${i}" type="text" autocomplete="off" name="attempt${i}At" placeholder="MM/DD/YYYY hh:mm AM/PM" value="${esc(dtVal)}">
+                <button type="button" class="btn btn-sm btn-use-now" data-target="editAttemptDate${i}">Now</button>
+              </div>
+            </label>
+            <label>Comment
+              <textarea id="editAttemptComment${i}" name="attempt${i}Comment" rows="2" placeholder="Comment for attempt ${i}...">${esc(cmVal)}</textarea>
+            </label>
+          </div>`;
+        }).join('')}
+        <div class="inline-actions" style="justify-content:flex-end">
+          <button type="button" class="btn" id="cancelEditHistoryBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save contact history</button>
+        </div>
+      </form>
+    </div>`;
+
+    const logAttemptHtml = attempt
+      ? `<div class="panel-block" id="logAttemptPanel"><h3>Log attempt ${attempt} of 3</h3><form id="cancelContactForm">${window.cancellationAttemptScript(attempt,r)}<label>Date and time<div class="datetime-with-action"><input id="cancelContactDateTime" type="text" autocomplete="off" name="contact_datetime" placeholder="MM/DD/YYYY hh:mm AM/PM" value="${esc(nowUsDateTime())}" required><button type="button" class="btn btn-sm" id="useNowCancelContact">Now</button></div></label><label>Comment<textarea name="comment" rows="3" placeholder="Call result or voicemail left..."></textarea></label><div class="form-row-end"><button class="btn btn-primary" type="submit">Save contact${attempt===3?' & close case':''}</button></div></form></div>`
+      : '<p class="muted" id="logAttemptPanel" style="margin-top:12px">All 3 contact attempts have been recorded (or follow-up is closed). Use “Edit contact history” above if you need to adjust them.</p>';
+
+    const contactHtml = `<div class="dsection"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><h3 style="margin:0">Contact history</h3><button type="button" class="btn btn-sm" id="toggleEditHistoryBtn">${ico('edit', 'sm')}Edit contact history</button></div>${historyView}${historyEditPanel}</div>${logAttemptHtml}`;
+
+    const statusOptions = [
+      { value: 'Follow-up', label: 'Follow-up (Needs follow-up)' },
+      { value: 'Rescheduled', label: 'Rescheduled' },
+      { value: 'Will Not Reschedule', label: 'Will Not Reschedule' },
+      { value: 'No Answer After 3 Attempts', label: 'No Answer After 3 Attempts' }
+    ];
+    const isClosedState = CANCEL_DONE.includes(r._state);
+    const factsList = [
+      ['Status', chip(r._state, cancelKind(r._state))],
+      ['Closure reason', T(r.closureReason || (isClosedState ? r._state : '—'))],
+      ['Closed at', r.closedAt ? fmtDateTime(r.closedAt) : '—'],
+      ['New appointment', r.newAppointmentDate ? fmtDate(r.newAppointmentDate) : '—'],
+      ['Last follow-up', r.lastFollowUpDate ? fmtDate(r.lastFollowUpDate) : '—']
+    ];
+    const closureFacts = `<div class="dsection"><h3>Current outcome</h3>${facts(factsList)}</div>`;
+
+    const closureHtml = `${closureFacts}<form id="cancelCloseForm" class="dsection"><h3>Update status &amp; outcome</h3><div class="dgrid"><label class="span-2">Status<select name="followUpStatus" id="cancelClosureReason" required>${statusOptions.map(o => `<option value="${o.value}" ${r._state === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}</select></label><div id="newAppointmentDateRow" class="span-2" ${r._state === 'Rescheduled' ? '' : 'style="display:none"'}><label>New appointment date${dateTextInput('newAppointmentDate', r.newAppointmentDate || '')}</label></div><label class="span-2">Notes<textarea name="followUpNotes" rows="4" placeholder="Follow-up notes...">${esc(r.followUpNotes || '')}</textarea></label></div><div class="form-row-end" style="margin-top:0"><button type="submit" class="btn btn-primary">Save status &amp; outcome</button></div></form>`;
+
     const tabs = [
       { key: 'contact', label: 'Contact history', html: contactHtml },
-      { key: 'close', label: 'Close case', html: closureHtml },
+      { key: 'close', label: 'Status & outcome', html: closureHtml },
       { key: 'details', label: 'Details', html: `<form id="cancelForm">${cancellationFormFields(r)}<div class="form-row-end"><button type="submit" class="btn btn-primary">Save changes</button></div></form>` },
       { key: 'policy', label: 'Policy script', html: cancellationScriptPanel(r.patientName) }
     ];
+
+    const actions = `<button type="button" class="btn ${r._state === 'Rescheduled' ? 'btn-quiet' : 'btn-primary'}" id="quickRescheduleBtn">${r._state === 'Rescheduled' ? 'Update reschedule' : 'Mark as Rescheduled'}</button>${r._state !== 'Will Not Reschedule' ? '<button type="button" class="btn" id="quickWillNotBtn">Will Not Reschedule</button>' : ''}${r._state !== 'Follow-up' ? '<button type="button" class="btn" id="quickReturnFollowBtn">Return to Follow-up</button>' : ''}`;
+
     openDrawer({
       title: r.patientName, accent: '#e1192d', wide: true,
       subtitle: esc([r.eventType, r.cancellationDate ? fmtDateText(r.cancellationDate) : '', r.examType].filter(Boolean).join(' · ')),
       chip: chip(r._state, cancelKind(r._state)),
+      actions,
       tabs, activeTab: tab === 'result' || tab === 'script' ? 'contact' : (tab || (needsFollow ? 'contact' : 'close')),
       footer: '<button type="button" class="btn btn-danger" id="deleteCancel">Delete patient</button><span class="spacer"></span><button type="button" class="btn" data-close>Close</button>',
       onMount: (root) => {
@@ -287,15 +353,120 @@
         if(contactForm)contactForm.onsubmit=async e=>{e.preventDefault();const payload=Object.fromEntries(new FormData(contactForm).entries());try{payload.contact_datetime=parseUsDateTime(payload.contact_datetime,'Date/Time');await api().addCancellationContact(rowNumber,payload);showToast(attempt===3?'Third attempt saved. Case closed.':'Contact saved.');reopen(attempt===3?'close':'contact')}catch(err){showToast(errorMessage(err),'error')}};
         const nowBtn=$('#useNowCancelContact',root);if(nowBtn)nowBtn.onclick=()=>$('#cancelContactDateTime',root).value=nowUsDateTime();
         wireScriptCopyButtons();
+
+        const qrBtn = $('#quickRescheduleBtn', root);
+        if (qrBtn) qrBtn.onclick = () => {
+          switchTab('close', root);
+          const sel = $('#cancelClosureReason', root);
+          if (sel) { sel.value = 'Rescheduled'; sel.dispatchEvent(new Event('change')); }
+          const dt = root.querySelector('#cancelCloseForm [name=newAppointmentDate]');
+          if (dt) dt.focus();
+        };
+
+        const qwBtn = $('#quickWillNotBtn', root);
+        if (qwBtn) qwBtn.onclick = async () => {
+          if (!await UX.confirm({ title: 'Mark as Will Not Reschedule?', message: `${r.patientName} will be closed as “Will Not Reschedule”.`, confirmLabel: 'Will Not Reschedule' })) return;
+          try {
+            await api().updateCancellation(rowNumber, { followUpStatus: 'Will Not Reschedule' });
+            showToast('Marked as Will Not Reschedule.');
+            reopen('close');
+          } catch (err) { showToast(errorMessage(err), 'error'); }
+        };
+
+        const qfBtn = $('#quickReturnFollowBtn', root);
+        if (qfBtn) qfBtn.onclick = async () => {
+          try {
+            await api().updateCancellation(rowNumber, { followUpStatus: 'Follow-up' });
+            showToast('Returned to follow-up.');
+            reopen('contact');
+          } catch (err) { showToast(errorMessage(err), 'error'); }
+        };
+
+        const toggleEditBtn = $('#toggleEditHistoryBtn', root);
+        const historyViewEl = $('#contactHistoryView', root);
+        const historyEditEl = $('#contactHistoryEditPanel', root);
+        const cancelEditBtn = $('#cancelEditHistoryBtn', root);
+        const logAttemptEl = $('#logAttemptPanel', root);
+
+        const setEditHistoryMode = (editing) => {
+          if (historyEditEl) historyEditEl.style.display = editing ? '' : 'none';
+          if (historyViewEl) historyViewEl.style.display = editing ? 'none' : '';
+          if (logAttemptEl) logAttemptEl.style.display = editing ? 'none' : '';
+          if (toggleEditBtn) toggleEditBtn.innerHTML = editing ? 'Cancel editing' : (ico('edit', 'sm') + 'Edit contact history');
+        };
+
+        if (toggleEditBtn) toggleEditBtn.onclick = () => setEditHistoryMode(historyEditEl && historyEditEl.style.display === 'none');
+        if (cancelEditBtn) cancelEditBtn.onclick = () => setEditHistoryMode(false);
+
+        $$('.btn-use-now', root).forEach(b => {
+          b.onclick = () => {
+            const target = $('#' + b.dataset.target, root);
+            if (target) target.value = nowUsDateTime();
+          };
+        });
+        $$('.btn-clear-attempt', root).forEach(b => {
+          b.onclick = () => {
+            const target = $('#' + b.dataset.target, root);
+            if (target) target.value = '';
+            const cm = $('#' + b.dataset.comment, root);
+            if (cm) cm.value = '';
+          };
+        });
+
+        const editHistForm = $('#editContactHistoryForm', root);
+        if (editHistForm) {
+          editHistForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(editHistForm).entries());
+            const payload = {};
+            try {
+              for (let i = 1; i <= 3; i++) {
+                const rawDate = String(data[`attempt${i}At`] || '').trim();
+                const rawComment = String(data[`attempt${i}Comment`] || '').trim();
+                if (rawDate) {
+                  payload[`attempt${i}At`] = parseUsDateTime(rawDate.replace(',', ''), `${i === 1 ? '1st' : i === 2 ? '2nd' : '3rd'} contact date/time`);
+                } else {
+                  payload[`attempt${i}At`] = '';
+                }
+                payload[`attempt${i}Comment`] = rawComment;
+              }
+              await api().updateCancellation(rowNumber, payload);
+              showToast('Contact history updated.');
+              reopen('contact');
+            } catch (err) {
+              showToast(errorMessage(err), 'error');
+            }
+          };
+        }
+
         $('#cancelForm', root).onsubmit = async (e) => {
           e.preventDefault();const data=Object.fromEntries(new FormData(e.currentTarget).entries());data.secondOccurrence=data.secondOccurrence||'NO';
           try{normalizeDates(data,[['originalAppointmentDate','Original Appointment Date'],['cancellationDate','Cancellation / No-Show Date']]);await api().updateCancellation(rowNumber,data);showToast('Cancelation updated in Excel.');reopen('details')}catch(err){showToast(errorMessage(err),'error')}
         };
-        const closeForm=$('#cancelCloseForm',root);if(closeForm)closeForm.onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(closeForm).entries());try{
-          if(data.followUpStatus==='Rescheduled'&&!data.newAppointmentDate.trim())throw new Error('Enter the new appointment date to close as Rescheduled.');
-          normalizeDates(data,[['newAppointmentDate','New Appointment Date']]);
-          await api().updateCancellation(rowNumber,{...data,closureReason:data.followUpStatus,rescheduled:data.followUpStatus==='Rescheduled'?'YES':'NO',closedAt:new Date().toISOString()});showToast('Follow-up closed.');closeDrawer(true);renderCancellationLanding();
-        }catch(err){showToast(errorMessage(err),'error')}};
+
+        const closeForm=$('#cancelCloseForm',root);
+        const statusSel=$('#cancelClosureReason',root);
+        const newApptRow=$('#newAppointmentDateRow',root);
+        if(statusSel&&newApptRow){
+          statusSel.onchange=()=>{
+            newApptRow.style.display=statusSel.value==='Rescheduled'?'':'none';
+          };
+        }
+        if(closeForm)closeForm.onsubmit=async e=>{
+          e.preventDefault();
+          const data=Object.fromEntries(new FormData(closeForm).entries());
+          try{
+            if(data.followUpStatus==='Rescheduled'&&!String(data.newAppointmentDate||'').trim())throw new Error('Enter the new appointment date when status is Rescheduled.');
+            if(data.followUpStatus==='Rescheduled'){
+              normalizeDates(data,[['newAppointmentDate','New Appointment Date']]);
+            }
+            await api().updateCancellation(rowNumber,data);
+            showToast('Status and outcome updated.');
+            closeDrawer(true);
+            renderCancellationLanding();
+          }catch(err){showToast(errorMessage(err),'error')}
+        };
+
         $('#deleteCancel', root).onclick = async () => {
           if (!await UX.confirm({ title: `Delete ${r.patientName}?`, message: 'This removes the row from the connected cancelations Excel. A backup is created first.', confirmLabel: 'Delete patient', danger: true })) return;
           try { await api().deleteCancellation(rowNumber); showToast('Patient deleted from the cancelations spreadsheet.'); closeDrawer(true); renderCancellationLanding(); } catch (err) { showToast(errorMessage(err), 'error'); }

@@ -1257,8 +1257,58 @@ async function updateCancellation(rowNumber,data){
   if(!Number.isInteger(r)||r<=analysis.headerRow||r>ws.rowCount)throw new Error('Cancellation row was not found.');
   const original=await getCancellationRecord(r);
   const merged={...original,...data};
-  if(normalizeHeader(merged.rescheduled)==='yes' || normalizeHeader(merged.followUpStatus)==='rescheduled'){merged.followUpStatus='Rescheduled';merged.rescheduled='YES';merged.closureReason='Rescheduled';merged.closedAt=merged.closedAt||new Date().toISOString();}
-  if(['will not reschedule','closed / not interested'].includes(normalizeHeader(merged.followUpStatus))){merged.followUpStatus='Will Not Reschedule';merged.closureReason='Will Not Reschedule';merged.closedAt=merged.closedAt||new Date().toISOString();}
+
+  const explicitStatus = normalizeHeader(data.followUpStatus || data.status || '');
+  const explicitReason = normalizeHeader(data.closureReason || '');
+  const explicitResched = normalizeHeader(data.rescheduled || '');
+
+  if (explicitStatus === 'rescheduled' || explicitReason === 'rescheduled' || explicitResched === 'yes') {
+    merged.followUpStatus = 'Rescheduled';
+    merged.rescheduled = 'YES';
+    merged.closureReason = 'Rescheduled';
+    merged.closedAt = data.closedAt || original.closedAt || new Date().toISOString();
+    if (data.newAppointmentDate !== undefined) merged.newAppointmentDate = data.newAppointmentDate;
+  } else if (['will not reschedule', 'closed / not interested', 'not interested'].includes(explicitStatus) || explicitReason === 'will not reschedule') {
+    merged.followUpStatus = 'Will Not Reschedule';
+    merged.rescheduled = 'NO';
+    merged.closureReason = 'Will Not Reschedule';
+    merged.closedAt = data.closedAt || original.closedAt || new Date().toISOString();
+  } else if (explicitStatus === 'no answer after 3 attempts' || explicitReason === 'no answer after 3 attempts') {
+    merged.followUpStatus = 'No Answer After 3 Attempts';
+    merged.rescheduled = 'NO';
+    merged.closureReason = 'No Answer After 3 Attempts';
+    merged.closedAt = data.closedAt || original.closedAt || new Date().toISOString();
+  } else if (['follow-up', 'follow up', 'needs follow-up', 'needs follow up', 'reopen', 'reopened'].includes(explicitStatus) || explicitReason === 'follow-up') {
+    merged.followUpStatus = 'Follow-up';
+    merged.rescheduled = 'NO';
+    merged.closureReason = '';
+    merged.closedAt = '';
+  } else {
+    if (normalizeHeader(merged.rescheduled) === 'yes' || normalizeHeader(merged.followUpStatus) === 'rescheduled') {
+      merged.followUpStatus = 'Rescheduled';
+      merged.rescheduled = 'YES';
+      merged.closureReason = 'Rescheduled';
+      merged.closedAt = merged.closedAt || new Date().toISOString();
+    } else if (['will not reschedule', 'closed / not interested'].includes(normalizeHeader(merged.followUpStatus))) {
+      merged.followUpStatus = 'Will Not Reschedule';
+      merged.rescheduled = 'NO';
+      merged.closureReason = 'Will Not Reschedule';
+      merged.closedAt = merged.closedAt || new Date().toISOString();
+    } else if (normalizeHeader(merged.followUpStatus) === 'no answer after 3 attempts') {
+      merged.followUpStatus = 'No Answer After 3 Attempts';
+      merged.rescheduled = 'NO';
+      merged.closureReason = 'No Answer After 3 Attempts';
+      merged.closedAt = merged.closedAt || new Date().toISOString();
+    }
+  }
+
+  if (data.attempt1At !== undefined || data.attempt2At !== undefined || data.attempt3At !== undefined) {
+    const latest = String(merged.attempt3At || merged.attempt2At || merged.attempt1At || '').trim();
+    if (latest) {
+      merged.lastFollowUpDate = latest.slice(0, 10);
+    }
+  }
+
   writeCancellationFields(ws.getRow(r),analysis,merged);
   try{await wb.xlsx.writeFile(filePath);}catch(err){if(err.code==='EBUSY'||err.code==='EPERM')throw new Error('The cancellations workbook appears to be open in Excel. Close it and try again.');throw err;}
   return {rowNumber:r,workbookPath:filePath,worksheet:analysis.worksheet};
